@@ -195,9 +195,11 @@ function lowerThird(key) {
   ];
   const poseId = { hugo: '13-lower-hugo', leire: '14-lower-leire', xuban: '15-lower-xuban' }[key];
   const b = screenBot({ spec: sp.lowerThirdBot, poseId, preset: 'lower-third', stillKey: 'lower', clips: { in: 48, loop: 480, out: 36 } });
+  // The icon's pop (back-out in, swell and shrink out) is part of the captured track's scale.
+  // Without a capture, animate it from the measured timing instead.
   const ic = tm?.icon;
-  if (ic) b.el.pop = { in: { start: fr(ic.in.t0), dur: fr(ic.in.dur), ease: ic.in.ease, k: ic.in.overshoot, from: 0, to: 1 },
-                       out: { start: fr(ic.out.t0), dur: fr(ic.out.dur), ease: ic.out.ease, k: ic.out.overshoot, from: 1, to: 0 } };
+  if (ic && !m?.shapes) b.el.pop = { in: { start: fr(ic.in.t0), dur: fr(ic.in.dur), ease: ic.in.ease, k: ic.in.overshoot, from: 0, to: 1 },
+                                     out: { start: fr(ic.out.t0), dur: fr(ic.out.dur), ease: ic.out.ease, k: ic.out.overshoot, from: 1, to: 0 } };
   els.splice(1, 0, b.el);
   return { els, clips: tm ? tm.clips : b.lengths, background: 'transparent', formats: ['mov', 'webm'] };
 }
