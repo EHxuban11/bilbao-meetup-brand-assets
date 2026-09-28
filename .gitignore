@@ -1,2 +1,8 @@
+node_modules/
+tools/scratch/
+out/
+fonts/*
+!fonts/README.md
+!fonts/stand-in/
 .DS_Store
 *.crdownload
