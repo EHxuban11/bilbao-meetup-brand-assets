@@ -152,14 +152,14 @@ Status as of 28 Sep 2026.
 
 - **The font.** Buy Universal Sans Display Regular from universalsans.com (Family Type). A Desktop licence covers rendering; check whether the stream or social use needs the Social or Broadcast licence.
 - **The designer.** Not asking Pablo for the source now. Revisit if something can't be matched.
-- **Where the repo lives.** Personal account for now. Move it to the organisers' GitHub?
+- **Where the repo lives.** Public, on Xuban's personal account. Move it to the organisers' GitHub?
 - **"LINK INSTAGRAM".** The stories carry a pill with that text, a placeholder for Instagram's link sticker. Keep it as is?
 - **The poster's link pill** reads `https://luma.com/spacexai-euskadi`, while `DESIGN.md` says to drop `https://`. Keep it as printed or follow the rule?
 
 ## Decisions log
 
 - 2026-09-28: rebuild the package as code instead of asking the designer for his source files (Xuban).
-- 2026-09-28: private repo on Xuban's account; the designer's delivery kept untouched in `reference/`.
+- 2026-09-28: repo on Xuban's account, first private, then made public (Xuban); the designer's delivery kept untouched in `reference/`.
 - 2026-09-28: render with a free stand-in font (Inter Display) until Universal Sans Display is licensed; never extract the copy embedded in the designer's PowerPoints.
 - 2026-09-28: text is placed by baseline, so swapping the font changes no layout.
 - 2026-09-28: bots move with motion captured from the designer's videos, not animated again by hand.
