@@ -16,15 +16,37 @@ export const line = (text, role, x, y, color, extra = {}) => ({ type: 'line', te
   tracking: STANDIN ? theme.font.standInTracking?.[role] : undefined, ...extra });
 
 // Lines stacked downward from a first baseline; `in`/`out` are start times (s), staggered per line.
-export function stack(lines, role, x, y0, colors, timing = {}) {
+// Each line gets a `key` (e.g. header0, hero1, foot0) so measured timings can target it.
+export function stack(lines, role, x, y0, colors, timing = {}, key = role) {
   return lines.map((t, i) => line(t, role, x, y0 + i * T[role].line, colors[i] ?? colors.at(-1), {
+    key: `${key}${i}`,
     in: timing.in !== undefined ? timing.in + i * (timing.stagger ?? 0.067) : undefined,
     out: timing.out !== undefined ? timing.out + i * (timing.outStagger ?? 0) : undefined,
   }));
 }
-const header = (lines, colors, timing = { in: 0.11, out: 0 }) => stack(lines, 'display', M.side, G.headerBaseline, colors, timing);
-const heroBlock = (lines, colors, t0 = 0.11) => stack(lines, 'hero', M.side, G.heroBaseline, colors, { in: t0, out: 0 });
-const footBlock = (lines, colors, t0 = 0.6) => stack(lines, 'body', M.side, G.footBaseline - (lines.length - 1) * T.body.line, colors, { in: t0, out: 0.067 });
+const header = (lines, colors, timing = { in: 0.11, out: 0 }) => stack(lines, 'display', M.side, G.headerBaseline, colors, timing, 'header');
+const heroBlock = (lines, colors, t0 = 0.11) => stack(lines, 'hero', M.side, G.heroBaseline, colors, { in: t0, out: 0 }, 'hero');
+const footBlock = (lines, colors, t0 = 0.6) => stack(lines, 'body', M.side, G.footBaseline - (lines.length - 1) * T.body.line, colors, { in: t0, out: 0.067 }, 'foot');
+
+// Measured text timings (assets/motion/<preset>.json -> "text") override the defaults above,
+// line by line, matched on `key`. Logos keyed "partners" fade in on the same clock.
+function applyTiming(els, preset) {
+  const tm = preset && motion(preset)?.text;
+  if (!tm) return els;
+  for (const e of els) {
+    if (!e?.key) continue;
+    const i = tm.in?.starts?.[e.key], o = tm.out?.starts?.[e.key];
+    if (e.type === 'line') {
+      if (i !== undefined) Object.assign(e, { in: i, inDur: tm.in.dur, inEase: tm.in.ease, travel: tm.in.travel ?? e.travel });
+      if (o !== undefined) Object.assign(e, { out: o, outDur: tm.out.dur, outEase: tm.out.ease });
+    } else if (e.type === 'svg') {
+      e.fade = { ...(e.fade || {}),
+        ...(i !== undefined && { in: { start: i, dur: tm.in.dur, ease: tm.in.ease, from: 0, to: 1 } }),
+        ...(o !== undefined && { out: { start: o, dur: tm.out.dur, ease: tm.out.ease, from: 1, to: 0 } }) };
+    }
+  }
+  return els;
+}
 
 // ---------- logos ----------
 export function logoEl(file, box, color, extra = {}) {
@@ -36,10 +58,11 @@ export function logoEl(file, box, color, extra = {}) {
 }
 // SpaceXAI wordmark top-right (the "-logo" versions): right edge on the margin, top on the margin, 27.92 px tall.
 // It holds still through the in and the loop and fades during the last frames of the out.
-function brandMark(clips) {
+function brandMark(clips, preset) {
   const outEnd = fr(clips.out ?? 42);
-  const el = logoEl(event.brandLogo, { right: W - M.side, y: M.top, h: 27.92 }, C.white,
-    { fade: clips.out ? { out: { start: outEnd - 0.4, dur: 0.233, from: 1, to: 0 } } : undefined });
+  const lf = preset && motion(preset)?.text?.logoFade;
+  const out = lf ? { start: lf.start, dur: lf.dur, ease: lf.ease, from: 1, to: 0 } : { start: outEnd - 0.4, dur: 0.233, from: 1, to: 0 };
+  const el = logoEl(event.brandLogo, { right: W - M.side, y: M.top, h: 27.92 }, C.white, { fade: clips.out ? { out } : undefined });
   return el ? [el] : [];
 }
 
@@ -65,7 +88,8 @@ const DEFAULT_CLIPS = { in: 90, loop: 480, out: 42 };
 export function screenBot({ spec, poseId, preset, stillKey, botIndex, override, clips = DEFAULT_CLIPS }) {
   const P = poseId ? pose(poseId) : null;
   const m = preset ? motion(preset) : null;
-  const cap = m ? (botIndex !== undefined ? m.bots?.[botIndex] : (m.shapes?.[spec.shape] || (m.shapes && Object.values(m.shapes)[0]))) : null;
+  const byColour = () => m.bots?.find(b => b.shape === spec.shape && b.color?.toLowerCase() === spec.color.toLowerCase()) ?? m.bots?.[botIndex];
+  const cap = m ? (botIndex !== undefined ? byColour() : (m.shapes?.[spec.shape] || (m.shapes && Object.values(m.shapes)[0]))) : null;
   const sameShape = P && P.shape === spec.shape;
   let tracks, still, anchor, lengths;
   if (cap) {
@@ -102,19 +126,20 @@ function speakerScreen(key, { qa = false } = {}) {
   const els = [
     { type: 'bot', shape: sp.bot.shape, path: shape(sp.bot.shape).path, color: sp.bot.color, anchor, track: tracks, still: tracks.loop[36] },
     ...header(event.name, [C.white]),
-    line(sp.time, 'display', M.side, time, C.red, { in: 0.36, out: 0.067 }),
-    line(titles[0], 'hero', M.side, name, C.white, { in: 0.51, out: 0.067 }),
-    line(titles[1], 'hero', M.side, company, C.grey, { in: 0.61, out: 0.067 }),
+    line(sp.time, 'display', M.side, time, C.red, { key: 'time', in: 0.36, out: 0.067 }),
+    line(titles[0], 'hero', M.side, name, C.white, { key: 'name', in: 0.51, out: 0.067 }),
+    line(titles[1], 'hero', M.side, company, C.grey, { key: 'company', in: 0.61, out: 0.067 }),
   ];
-  if (qa) els.push(line(null, 'body', M.side, G.footBaseline, C.white, { spans: [{ text: sp.name, color: C.white }, { text: ` · ${sp.company}`, color: C.grey }], in: 0.91, out: 0.067 }));
-  else els.push(...stack(sp.talk, 'body', M.side, footFirst, [C.white], { in: 0.91, out: 0.067 }));
-  return { els, clips: { in: tracks.in.length, loop: tracks.loop.length, out: tracks.out.length } };
+  if (qa) els.push(line(null, 'body', M.side, G.footBaseline, C.white, { key: 'foot0', spans: [{ text: sp.name, color: C.white }, { text: ` · ${sp.company}`, color: C.grey }], in: 0.91, out: 0.067 }));
+  else els.push(...stack(sp.talk, 'body', M.side, footFirst, [C.white], { in: 0.91, out: 0.067 }, 'talk'));
+  const preset = qa ? 'qa' : 'speaker';
+  return { els: applyTiming(els, preset), clips: { in: tracks.in.length, loop: tracks.loop.length, out: tracks.out.length }, preset };
 }
 
 function singleBot(key, poseId, text, { preset = key, stillKey = key, clips } = {}) {
   const spec = event.screens[key].bot;
   const b = screenBot({ spec, poseId, preset, stillKey, override: event.screens[key].anchor, clips });
-  return { els: [b.el, ...text], clips: b.lengths };
+  return { els: [b.el, ...applyTiming(text, preset)], clips: b.lengths, preset };
 }
 
 function agendaRows(t0 = 0.3) {
@@ -124,9 +149,9 @@ function agendaRows(t0 = 0.3) {
     const title = sp ? sp.name : item.title;
     const lines = sp ? [sp.company, ...sp.talk] : item.lines;
     const start = t0 + k * 0.1;
-    rows.push(line(item.time, 'agenda', G.rightColumn, y, C.red, { in: start, out: 0.067 }));
-    rows.push(line(title, 'agenda', G.agendaText, y, C.white, { in: start, out: 0.067 }));
-    lines.forEach((l, i) => rows.push(line(l, 'agenda', G.agendaText, y + (i + 1) * T.agenda.line, C.grey, { in: start + 0.05 * (i + 1), out: 0.067 })));
+    rows.push(line(item.time, 'agenda', G.rightColumn, y, C.red, { key: `row${k}`, in: start, out: 0.067 }));
+    rows.push(line(title, 'agenda', G.agendaText, y, C.white, { key: `row${k}`, in: start, out: 0.067 }));
+    lines.forEach((l, i) => rows.push(line(l, 'agenda', G.agendaText, y + (i + 1) * T.agenda.line, C.grey, { key: `row${k}.detail${i}`, in: start + 0.05 * (i + 1), out: 0.067 })));
     y += (lines.length + 1) * T.agenda.line + 18; k++;
   }
   return rows;
@@ -149,7 +174,7 @@ const SCREENS = {
   agendaPartners: () => singleBot('agenda', '22-agenda-partners', [
     ...header([...event.name, event.date], [C.white, C.white, C.grey]),
     ...agendaRows(),
-    ...partnerRow(M.side, 963, 1, 64, { fade: { in: { start: 0.9, dur: 0.4, from: 0, to: 1, ease: 'cubicOut' }, out: { start: 0, dur: 0.3, from: 1, to: 0 } } }),
+    ...partnerRow(M.side, 963, 1, 64, { key: 'partners', fade: { in: { start: 0.9, dur: 0.4, from: 0, to: 1, ease: 'cubicOut' }, out: { start: 0, dur: 0.3, from: 1, to: 0 } } }),
   ], { preset: 'agenda-partners', stillKey: 'agenda-partners' }),
   thanks: withLogo => {
     const s = singleBot('thanks', '11-thanks', [
@@ -157,7 +182,7 @@ const SCREENS = {
       ...footBlock([event.nameOneLine, event.date], [C.white, C.grey]),
     ]);
     // the clean "Gracias" carries the classic SpaceX wordmark (the -logo version swaps in SpaceXAI)
-    if (!withLogo) { const e = logoEl(event.hostLogo, { right: 1839.8, y: 100.62, h: 22.7 }, C.spacex, { fade: { out: { start: fr(s.clips.out) - 0.4, dur: 0.233, from: 1, to: 0 } } }); if (e) s.els.push(e); }
+    if (!withLogo) { const e = brandMark(s.clips, 'thanks')[0]; const h = logoEl(event.hostLogo, { right: 1839.8, y: 100.62, h: 22.7 }, C.spacex, { fade: e?.fade }); if (h) s.els.push(h); }
     return s;
   },
   brb: () => singleBot('brb', '12-brb', [
@@ -168,7 +193,8 @@ const SCREENS = {
     const bots = event.networkingBots.map((spec, i) => screenBot({ spec, poseId: `10-networking/${i}`, preset: 'networking', stillKey: 'networking', botIndex: i }));
     // back to front: the green square sits over the blue round
     const order = [3, 1, 2, 0, 4, 5];
-    return { els: [...order.map(i => bots[i].el), ...heroBlock([...event.screens.networking.title, ...event.screens.networking.subtitle], [C.white, C.white, C.grey])], clips: bots[0].lengths };
+    const text = heroBlock([...event.screens.networking.title, ...event.screens.networking.subtitle], [C.white, C.white, C.grey]);
+    return { els: [...order.map(i => bots[i].el), ...applyTiming(text, 'networking')], clips: bots[0].lengths, preset: 'networking' };
   },
 };
 
@@ -204,16 +230,33 @@ function lowerThird(key) {
   return { els, clips: tm ? tm.clips : b.lengths, background: 'transparent', formats: ['mov', 'webm'] };
 }
 
+// Stinger: one 1.6 s clip with alpha; the cut sits at 800 ms (frame 24), hidden by a blink.
+// The clip is absolute (anchored at the screen centre); the still keeps the fitted pose.
 function stinger(i) {
   const spec = event.stingers[i];
-  const b = screenBot({ spec, poseId: `${16 + i}-stinger-${i + 1}`, preset: `stinger-${i + 1}`, stillKey: 'stinger', clips: { main: 48 } });
-  return { els: [b.el], clips: b.lengths.main ? b.lengths : { main: 48 }, background: 'transparent', formats: ['mov', 'webm'] };
+  const P = pose(`${16 + i}-stinger-${i + 1}`);
+  const S = motion('stingers')?.stingers?.find(s => s.id === `stinger-${i + 1}`);
+  const m = motion('stingers');
+  const anchor = m ? { x: m.anchor.cx, y: m.anchor.cy, rot: 0, scale: 1 } : { x: 960, y: 540, rot: 0, scale: 1 };
+  const clip = S && S.shape === spec.shape ? S.clip : S ? retarget(S.clip, S.shape, spec.shape) : [];
+  // Stills: stinger 3 shows only a sliver of the bot, so the designer's still matches frame 4 of the
+  // captured clip better than a silhouette fit (checked by diffing every frame against the still);
+  // the others use the fitted pose, with the eyes exactly as fitted (some are off-screen or mid-blink).
+  const STILL_FRAME = { 3: 4 };
+  const still = STILL_FRAME[i + 1] !== undefined && clip[STILL_FRAME[i + 1]]
+    ? clip[STILL_FRAME[i + 1]]
+    : { b: [P.x - anchor.x, P.y - anchor.y, P.rot, P.scale], e: P.eyes };
+  const el = { type: 'bot', shape: spec.shape, path: shape(spec.shape).path, color: spec.color, anchor, flip: !!P.flip, track: { main: clip }, still };
+  return { els: [el], clips: { main: clip.length || 48 }, background: 'transparent', formats: ['mov', 'webm'] };
 }
 
 function logoBug() {
   const m = motion('logo-bug');
   const clips = m?.clips || { in: 18, loop: 306, out: 18 };
-  return { els: brandMark(clips), clips, background: 'transparent', formats: ['mov', 'webm'] };
+  const [el] = brandMark(clips);
+  const f = m?.logo;
+  if (el && f) el.fade = { in: f.in && { from: 0, to: 1, ...f.in }, out: f.out && { from: 1, to: 0, ...f.out } };
+  return { els: el ? [el] : [], clips, background: 'transparent', formats: ['mov', 'webm'] };
 }
 
 // ---------- registry ----------
@@ -224,8 +267,8 @@ export function liveScreens() {
     for (const withLogo of variants) list.push({
       id: withLogo ? `${id}-logo` : id, folder: withLogo ? `${id}-logo` : id,
       build() {
-        const { els, clips, background = C.black, formats } = fn(withLogo);
-        const elements = withLogo ? [...els, ...brandMark(clips)] : els;
+        const { els, clips, background = C.black, formats, preset } = fn(withLogo);
+        const elements = withLogo ? [...els, ...brandMark(clips, preset)] : els;
         return { scene: { w: W, h: H, fps: FPS, background, elements }, clips, formats };
       },
     });
