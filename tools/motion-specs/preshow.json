@@ -1,0 +1,26 @@
+{
+ "preset": "preshow",
+ "fps": 30,
+ "shapes": {
+  "round": {
+   "raw": {
+    "in": "tools/scratch/motion/preshow-1-in.raw.json",
+    "loop": "tools/scratch/motion/preshow-2-loop.raw.json",
+    "out": "tools/scratch/motion/preshow-3-out.raw.json"
+   },
+   "video": "reference/live-screens/video/preshow_2-loop.mp4",
+   "anchor": {
+    "clip": "loop",
+    "frame": 120
+   },
+   "rotFromEyes": true
+  }
+ },
+ "stills": {
+  "preshow": {
+   "clip": "loop",
+   "frame": 36
+  }
+ },
+ "notes": "Preshow (01). Bot = canonical round (assets/bots/round.json) at scale 1.4375; anchor = neutral hold, loop frame 120 (see anchor.cx/cy) (loop frames 84-240 and 384-540); always cut by the right/bottom edges. Captured by registering the canonical shape (tools/mocap.mjs --shape). Rotation from the eyes. Clips: in 72 fr (2.4 s), loop 600 fr (20 s, second half 300-599 mirrors the first), out 42 fr (1.4 s). Still = loop frame 36 (verified: eye positions match 01-preshow.png within 0.04 px). Blink around loop frame 450-462."
+}

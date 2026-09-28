@@ -196,11 +196,18 @@ for (const i of order) {
   // sil above is sparse (STEP grid); score() samples exact pixels, so dilate to STEP cells
   for (let k = 0; k < pts.length; k += 2) { const x0 = Math.floor(pts[k]), y0 = Math.floor(pts[k + 1]); for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const x = x0 + dx, y = y0 + dy; if (x >= 0 && y >= 0 && x < W && y < H) sil[y * W + x] = 1; } }
   const s0 = sd ? sd.s : 1;
-  const fn = FIT_SCALE ? p => -score(p, sil, tc) : p => -score([p[0], p[1], p[2], s0], sil, tc);
-  const seed0 = sd ? [sd.x, sd.y, sd.rot] : (() => { const [cx, cy] = centroid(pts); return [cx, cy + 150, 0]; })();
-  const seed = FIT_SCALE ? [...seed0, s0] : seed0;
-  const st1 = FIT_SCALE ? [20, 20, 3, 0.05] : [20, 20, 3], st2 = FIT_SCALE ? [3, 3, 0.5, 0.01] : [3, 3, 0.5];
-  let best = nelderMead(fn, seed, st1, 160); best = nelderMead(fn, best.x, st2, 160);
+  const [vcx, vcy] = centroid(pts);
+  // candidate seeds: the neighbour's pose, and a fresh one from the visible silhouette
+  const seeds0 = [...(sd ? [[sd.x, sd.y, sd.rot, sd.s]] : []), [vcx, vcy, sd ? sd.rot : 0, 1], [vcx, vcy + 60, sd ? sd.rot : 0, 1]];
+  let best = null;
+  for (const s4 of seeds0) {
+    const sc = FIT_SCALE ? s4[3] : s0;
+    const fn = FIT_SCALE ? p => -score(p, sil, tc) : p => -score([p[0], p[1], p[2], sc], sil, tc);
+    const seed = FIT_SCALE ? s4 : s4.slice(0, 3);
+    const st1 = FIT_SCALE ? [20, 20, 3, 0.05] : [20, 20, 3], st2 = FIT_SCALE ? [3, 3, 0.5, 0.01] : [3, 3, 0.5];
+    let b = nelderMead(fn, seed, st1, 160); b = nelderMead(fn, b.x, st2, 160);
+    if (!best || b.v < best.v) best = b;
+  }
   const sFit = FIT_SCALE ? best.x[3] : s0;
   const vis = Math.min(1, frames[i].n / (anchorArea * sFit * sFit)); // visible share of the body
   frames[i] = { x: +best.x[0].toFixed(2), y: +best.x[1].toFixed(2), rot: +best.x[2].toFixed(3), s: +sFit.toFixed(4), clipped: true, vis: +vis.toFixed(3), iou: +(-best.v).toFixed(4), eyes: frames[i].eyes };

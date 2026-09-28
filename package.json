@@ -9,7 +9,11 @@
     "compare": "node src/render.mjs compare",
     "deck": "node src/deck/build.mjs --kit",
     "social": "node src/render.mjs stills social",
-    "print": "node src/render.mjs print"
+    "print": "node src/render.mjs print",
+    "package": "node src/package.mjs",
+    "build": "node src/render.mjs stills && node src/render.mjs video && node src/reel.mjs && node src/render.mjs print && node src/deck/build.mjs --kit",
+    "reel": "node src/reel.mjs",
+    "verify": "node tools/verify-videos.mjs"
   },
   "repository": {
     "type": "git",

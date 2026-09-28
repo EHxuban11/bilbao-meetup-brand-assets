@@ -36,13 +36,15 @@ function applyTiming(els, preset) {
   for (const e of els) {
     if (!e?.key) continue;
     const i = tm.in?.starts?.[e.key], o = tm.out?.starts?.[e.key];
+    // travel "line" = one line height of the line's own role, the engine's default
+    const travel = typeof tm.in?.travel === 'number' ? tm.in.travel : e.travel;
     if (e.type === 'line') {
-      if (i !== undefined) Object.assign(e, { in: i, inDur: tm.in.dur, inEase: tm.in.ease, travel: tm.in.travel ?? e.travel });
+      if (i !== undefined) Object.assign(e, { in: i, inDur: tm.in.dur, inEase: tm.in.ease, travel });
       if (o !== undefined) Object.assign(e, { out: o, outDur: tm.out.dur, outEase: tm.out.ease });
-    } else if (e.type === 'svg') {
-      e.fade = { ...(e.fade || {}),
-        ...(i !== undefined && { in: { start: i, dur: tm.in.dur, ease: tm.in.ease, from: 0, to: 1 } }),
-        ...(o !== undefined && { out: { start: o, dur: tm.out.dur, ease: tm.out.ease, from: 1, to: 0 } }) };
+    } else if (e.type === 'svg') { // logos keyed like lines slide in and out like lines
+      delete e.fade;
+      e.slide = { ...(i !== undefined && { in: { start: i, dur: tm.in.dur, ease: tm.in.ease } }),
+                  ...(o !== undefined && { out: { start: o, dur: tm.out.dur, ease: tm.out.ease } }) };
     }
   }
   return els;
@@ -149,7 +151,7 @@ function agendaRows(t0 = 0.3) {
     const title = sp ? sp.name : item.title;
     const lines = sp ? [sp.company, ...sp.talk] : item.lines;
     const start = t0 + k * 0.1;
-    rows.push(line(item.time, 'agenda', G.rightColumn, y, C.red, { key: `row${k}`, in: start, out: 0.067 }));
+    rows.push(line(item.time, 'agenda', G.rightColumn, y, C.red, { key: `row${k}.time`, in: start, out: 0.067 }));
     rows.push(line(title, 'agenda', G.agendaText, y, C.white, { key: `row${k}`, in: start, out: 0.067 }));
     lines.forEach((l, i) => rows.push(line(l, 'agenda', G.agendaText, y + (i + 1) * T.agenda.line, C.grey, { key: `row${k}.detail${i}`, in: start + 0.05 * (i + 1), out: 0.067 })));
     y += (lines.length + 1) * T.agenda.line + 18; k++;
@@ -182,7 +184,7 @@ const SCREENS = {
       ...footBlock([event.nameOneLine, event.date], [C.white, C.grey]),
     ]);
     // the clean "Gracias" carries the classic SpaceX wordmark (the -logo version swaps in SpaceXAI)
-    if (!withLogo) { const e = brandMark(s.clips, 'thanks')[0]; const h = logoEl(event.hostLogo, { right: 1839.8, y: 100.62, h: 22.7 }, C.spacex, { fade: e?.fade }); if (h) s.els.push(h); }
+    if (!withLogo) { const h = logoEl(event.hostLogo, { right: 1839.8, y: 100.62, h: 22.7 }, C.spacex, { key: 'wordmark' }); if (h) s.els.push(...applyTiming([h], 'thanks')); }
     return s;
   },
   brb: () => singleBot('brb', '12-brb', [
@@ -212,10 +214,10 @@ function lowerThird(key) {
     { type: 'rect', id: 'lt-pill', x: M.side, y: top, h, r: 36, fill: C.black, fitText: { ids, padRight: 45 },
       grow: tm && { in: { start: fr(tm.pill.in.t0), dur: fr(tm.pill.in.dur), ease: tm.pill.in.ease, from: 0, to: 1 },
                     out: { start: fr(tm.pill.out.t0), dur: fr(tm.pill.out.dur), ease: tm.pill.out.ease, from: 1, to: 0 } } },
-    line(sp.name, 'body', 212, nameY, C.white, { id: 'lt-name', travel: 40,
+    line(sp.name, 'body', 212, nameY, C.white, { id: 'lt-name', key: 'name', travel: 40,
       in: tIn && fr(tIn.starts.name), inDur: tIn && fr(tIn.dur), inEase: tIn?.ease,
       out: tOut && fr(tOut.starts.name), outDur: tOut && fr(tOut.dur), outEase: tOut?.ease }),
-    ...detail.map((d, i) => line(d, 'small', 212, nameY + 40 + i * T.small.line, C.grey, { id: `lt-d${i}`, travel: 38,
+    ...detail.map((d, i) => line(d, 'small', 212, nameY + 40 + i * T.small.line, C.grey, { id: `lt-d${i}`, key: `detail${i}`, travel: 38,
       in: tIn && fr(tIn.starts.detail + i * 1.75), inDur: tIn && fr(tIn.dur), inEase: tIn?.ease,
       out: tOut && fr(tOut.starts.detail + i * 1.75), outDur: tOut && fr(tOut.dur), outEase: tOut?.ease })),
   ];
@@ -227,6 +229,7 @@ function lowerThird(key) {
   if (ic && !m?.shapes) b.el.pop = { in: { start: fr(ic.in.t0), dur: fr(ic.in.dur), ease: ic.in.ease, k: ic.in.overshoot, from: 0, to: 1 },
                                      out: { start: fr(ic.out.t0), dur: fr(ic.out.dur), ease: ic.out.ease, k: ic.out.overshoot, from: 1, to: 0 } };
   els.splice(1, 0, b.el);
+  applyTiming(els, 'lower-third');
   return { els, clips: tm ? tm.clips : b.lengths, background: 'transparent', formats: ['mov', 'webm'] };
 }
 

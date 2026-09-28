@@ -95,12 +95,18 @@ const builders = {
   },
 
   // Inline SVG markup (logos, QR). `svg` is the inner markup; placed in box x,y,w,h via viewBox.
-  svg(it, root) {
+  svg(it, root, defs) {
     const g = el('g', {}, root);
+    let clipId;
+    if (it.slide) { // revealed like a text line: clipped to its own box
+      clipId = `clip${uid++}`;
+      const cp = el('clipPath', { id: clipId }, defs);
+      el('rect', { x: it.x - 4, y: it.y - 2, width: it.w + 8, height: it.h + 4 }, cp);
+    }
     const s = el('svg', { x: it.x, y: it.y, width: it.w, height: it.h, viewBox: it.viewBox, preserveAspectRatio: it.fit || 'xMidYMid meet', overflow: 'visible', color: it.color }, g);
     s.innerHTML = it.markup;
     if (it.color) s.style.color = it.color;
-    return { g, s };
+    return { g, s, clipId };
   },
 
   rect(it, root) {
@@ -170,6 +176,7 @@ function pose(n, clip, frame, t) {
   if (it.type === 'line') return poseLine(n, clip, t);
   if (it.type === 'bot') return poseBot(n, clip, frame, t);
   if (it.type === 'rect' && it.grow) poseGrow(n, clip, t);
+  if (it.type === 'svg' && it.slide) poseSlide(n, clip, t);
   applyFade(n.g, it, clip, t);
   applyMove(n.g, it, clip, t);
 }
@@ -192,6 +199,17 @@ function poseLine(n, clip, t) {
   n.g.style.display = visible ? '' : 'none';
   if (off) n.g.setAttribute('clip-path', `url(#${n.clipId})`); else n.g.removeAttribute('clip-path');
   n.text.setAttribute('transform', off ? `translate(0 ${off.toFixed(3)})` : '');
+}
+
+// A logo revealed like a text line: slides up into its box on the in, up and out on the out.
+function poseSlide(n, clip, t) {
+  const sl = n.item.slide, travel = sl.travel ?? n.item.h;
+  let off = 0, visible = true;
+  if (clip === 'in' && sl.in) { const p = progress(t, sl.in.start, sl.in.dur); off = travel * (1 - run(sl.in.ease, p)); if (t < sl.in.start) visible = false; }
+  if (clip === 'out' && sl.out) { const p = progress(t, sl.out.start, sl.out.dur); off = -travel * run(sl.out.ease, p); if (p >= 1) visible = false; }
+  n.g.style.display = visible ? '' : 'none';
+  if (off) n.g.setAttribute('clip-path', `url(#${n.clipId})`); else n.g.removeAttribute('clip-path');
+  n.s.setAttribute('transform', off ? `translate(0 ${off.toFixed(3)})` : '');
 }
 
 // Pill grows from / shrinks to its left cap: width animates between `from` and `to` (fractions).

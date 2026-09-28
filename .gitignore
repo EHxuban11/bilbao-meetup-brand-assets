@@ -6,3 +6,4 @@ fonts/*
 !fonts/stand-in/
 .DS_Store
 *.crdownload
+dist/

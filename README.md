@@ -14,8 +14,8 @@ Ours: all 13 done. Every bot is fitted to the designer's still (overlap 0.97 to 
 <td width="50%" valign="top">
 <a href="reference/live-screens/video/"><img src="docs/previews/video.gif" alt="The speaker screen's entrance, rendered by this repo"></a>
 <p><b>2. Screen videos</b><br>
-Per screen: in, loop, out and full clips, H.264, 1080p, 30 fps.<br>
-Ours: speaker and Q&A screens done; frame by frame, the bots differ from the originals by less than 1 in 255.<br>
+Per screen: in, loop, out and full clips, H.264, 1080p, 30 fps, plus the 51 s preview reel.<br>
+Ours: done. Where the designer's clips exist, the bots differ from his by less than 1 in 255, frame by frame.<br>
 <a href="https://github.com/EHxuban11/bilbao-meetup-brand-assets/releases/latest/download/grokbot-bilbao-screen-videos.zip">Download (zip)</a> · <a href="reference/live-screens/video/">Designer's original</a> · <a href="src/render.mjs">Source</a></p>
 </td>
 </tr>
@@ -24,8 +24,8 @@ Ours: speaker and Q&A screens done; frame by frame, the bots differ from the ori
 <a href="reference/live-screens/stills/"><img src="docs/previews/overlays.jpg" alt="The three lower thirds and five stingers, rendered by this repo"></a>
 <p><b>3. Stream overlays</b><br>
 3 lower thirds, 5 stingers and the logo bug, as ProRes 4444 .mov and VP9 .webm with alpha.<br>
-Ours: stills done; their animation is in progress.<br>
-<a href="https://github.com/EHxuban11/bilbao-meetup-brand-assets/releases/latest/download/grokbot-bilbao-overlays.zip">Download (zip)</a> · <a href="reference/live-screens/stills/">Designer's original</a></p>
+Ours: done. The lower third and stingers 1 and 4 match his clips almost exactly.<br>
+<a href="https://github.com/EHxuban11/bilbao-meetup-brand-assets/releases/latest/download/grokbot-bilbao-overlays.zip">Download (zip)</a> · <a href="reference/live-screens/stills/">Designer's original</a> · <a href="docs/motion-spec.md">Motion spec</a></p>
 </td>
 <td width="50%" valign="top">
 <a href="reference/social/"><img src="docs/previews/social.jpg" alt="The horizontal agenda post, rendered by this repo"></a>
@@ -55,7 +55,7 @@ Ours: done. The generated templates are identical to the designer's, part for pa
 
 **Get them.** Under each card:
 
-- Download (zip): our files, from the latest release. There is no release yet: the first one goes out when every card is rebuilt. Until then, run the commands below and look in `out/`.
+- Download (zip): our files, from the [latest release](https://github.com/EHxuban11/bilbao-meetup-brand-assets/releases/latest). They were rendered with the stand-in font; see [The font](#open-questions).
 - Designer's original: the files Pablo delivered, kept untouched as the target.
 - Source: the code that makes the card.
 
@@ -69,17 +69,20 @@ npm run compare                                    # ours against the designer's
 npm run social                                     # every social post  -> out/social/
 npm run print                                      # the poster PDFs    -> out/print/
 npm run deck                                       # slide templates and speaker kits -> out/deck/
+npm run reel                                       # the preview reel, from the rendered clips
+npm run verify                                     # our videos against the designer's clips
+npm run build && npm run package                   # everything, then the release zips -> dist/
 ```
 
 To build a speaker's actual deck from their content: `node src/deck/build.mjs talk.json --speaker hugo`. The format is in [docs/deck.md](docs/deck.md).
 
-Every command takes a filter: `node src/render.mjs video speaker-hugo`, `node src/render.mjs stills logo`, `node src/render.mjs stills '!logo'`. One screen's four clips render in about 25 seconds.
+Every command takes a filter: `node src/render.mjs video speaker-hugo`, `node src/render.mjs stills logo`, `node src/render.mjs stills '!logo'`. One screen's four clips render in about 25 seconds; everything in about 8 minutes.
 
 ---
 
 Working repo for the event's brand system. Original design: Pablo Gonzalez, delivered through Frame.io on 28 Sep 2026.
 
-> **Status: v0.3 (28 Sep 2026). Every still, the social posts, the poster and the speaker slides are rebuilt and checked against the originals; the speaker and Q&A videos too.** The animation of the other screens and the overlays is being captured now. What is decided is in the decisions log at the bottom.
+> **Status: v1.0 (28 Sep 2026). Every deliverable is rebuilt and checked against the originals.** The only thing between these files and the designer's is the font: buy the licence and re-render. What is decided is in the decisions log at the bottom.
 
 ## The problem
 
@@ -93,6 +96,23 @@ The designer delivers exports, not the files that make them. Changing a logo or 
 4. **The designer's motion, not an imitation.** The bots move with tracks captured frame by frame from his videos.
 5. **His files stay untouched** in `reference/`, as the target.
 6. **Licensed things stay licensed.** The event font is never extracted from his PowerPoints.
+
+## How close it is
+
+Measured with `npm run compare` (stills) and `npm run verify` (videos): mean difference per pixel, on a 0 to 255 scale. The whole-frame numbers include the stand-in font; the bot numbers don't.
+
+| Deliverable | Whole frame | Bot area | Notes |
+| --- | --- | --- | --- |
+| Speaker screens, in, loop, out | 1.5 to 5.1 | 0.2 to 0.6 | worst single frame 0.9 |
+| Pre-show, in, loop, out | 0.6 to 1.7 | 0.3 to 0.6 | |
+| Lower third (Leire), in, loop, out | 0.2 to 0.5 | 0.01 | |
+| Stingers 1 and 4 | 0.2 to 0.4 | 0.2 to 0.4 | stingers 2, 3 and 5 were rebuilt from the 720p reel, no full clip to check against |
+| Logo bug | 0.02 | | |
+| Networking intro | 6.1 | 4.6 | the weakest: each bot runs the speaker motion at its own phase, fitted to the reel and the still, not captured frame by frame |
+| Preview reel | 4.6 | | worst frame 41, the fast entry of stinger 5 |
+| Stills (35 live, 9 social) | 0.02 to 5.5 | | text width only, except stingers 1 and 3 (only a sliver of the bot is visible) |
+
+Screens whose clips weren't in the delivery (welcome, agenda, Q&A, thanks, be right back, networking loop and out) take their motion from the 720p reel; their text outs and the partner row timing on screen 22 follow the measured screens (marked "assumed" in `assets/motion/`).
 
 ## What the designer's files told us
 
@@ -111,14 +131,14 @@ Status as of 28 Sep 2026.
 
 | # | Deliverable | Format | Owner | Status |
 | --- | --- | --- | --- | --- |
-| 1 | Speaker screens, Hugo, Leire, Xuban, clean and logo | PNG; MP4 in, loop, out, full | Claude | Done. Bots match within antialiasing; the motion matches the originals |
+| 1 | Speaker screens, Hugo, Leire, Xuban, clean and logo | PNG; MP4 in, loop, out, full | Claude | Done |
 | 2 | Q&A screens, same three | Same | Claude | Done |
-| 3 | Pre-show, welcome, agenda, agenda with partners, thanks, be right back | Same | Claude | Stills done; motion in progress |
-| 4 | Networking, six bots | Same | Claude | Still done; motion in progress |
-| 5 | Lower thirds, three | MOV and WebM with alpha | Claude | Stills done; animation timings captured, to verify |
-| 6 | Stingers, five | MOV and WebM with alpha | Claude | Stills done (1 and 3 approximate: only a sliver of the bot shows); motion in progress |
-| 7 | Logo bug | MOV and WebM with alpha | Claude | Still done; timing in progress |
-| 8 | Preview reel, about 51 s | MP4, 1080p and 720p | Claude | To do |
+| 3 | Pre-show, welcome, agenda, agenda with partners, thanks, be right back | Same | Claude | Done |
+| 4 | Networking, six bots | Same | Claude | Done; motion modelled, not captured (see above) |
+| 5 | Lower thirds, three | MOV and WebM with alpha | Claude | Done |
+| 6 | Stingers, five | MOV and WebM with alpha | Claude | Done |
+| 7 | Logo bug | MOV and WebM with alpha | Claude | Done |
+| 8 | Preview reel, 51 s, clean and logo | MP4, 1080p and 720p | Claude | Done, same cuts as the designer's |
 | 9 | Social: agenda, horizontal and story, 1x and @2x | PNG | Claude | Done |
 | 10 | Social: partner posts, five | PNG | Claude | Done |
 | 11 | Poster, with and without crop marks | PDF, CMYK | Claude | Done |
@@ -147,6 +167,8 @@ Status as of 28 Sep 2026.
 - 2026-09-28: print colours use the designer's own CMYK values, read from his poster PDF.
 - 2026-09-28: every bot on a still is placed by fitting its outline to the designer's image (`tools/fit-stills.mjs`); a screen's motion is anchored so its still frame lands exactly there.
 - 2026-09-28: the poster keeps the designer's quirks: its own logo proportions and a 19 mm line under a wrapped talk title.
+- 2026-09-28: every screen's motion, the lower thirds, the stingers and the logo bug are captured from the designer's clips, or from his 720p reel where no clip was delivered (`docs/motion-spec.md`).
+- 2026-09-28: the preview reel reuses his cuts: the same 11 stinger transitions, and each screen starts 9 to 15 frames after the cut.
 - 2026-09-28: the slide templates are generated with PptxGenJS plus the same fix-ups the designer applied, so his `build.py` and `SKILL.md` keep working on ours.
 
 ## Repo layout
@@ -166,4 +188,5 @@ Status as of 28 Sep 2026.
 1. Edit `config/event.js` (or `config/theme.js`).
 2. `npm run compare` to make sure nothing drifted from the grid.
 3. `npm run stills` and `npm run video`, then check `out/`.
-4. Commit, and publish a release so the download links above serve the new files.
+4. `npm run build && npm run package`, then publish a release so the download links above serve the new files:
+   `gh release create vYYYY-MM-DD dist/*.zip --title "Brand package, D Month YYYY"`.
