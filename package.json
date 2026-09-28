@@ -7,7 +7,9 @@
     "stills": "node src/render.mjs stills",
     "video": "node src/render.mjs video",
     "compare": "node src/render.mjs compare",
-    "deck": "node src/deck/build.mjs --kit"
+    "deck": "node src/deck/build.mjs --kit",
+    "social": "node src/render.mjs stills social",
+    "print": "node src/render.mjs print"
   },
   "repository": {
     "type": "git",

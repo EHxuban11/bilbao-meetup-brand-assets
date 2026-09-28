@@ -1,0 +1,27 @@
+{
+  "name": "drop",
+  "source": "reference/social/SpaceXAI Bilbao Partners Horizontal.png (blue #457BBE, largest fully visible drop), rotated +16 deg so the eyes are vertical (rot 0 = upright, like the other shapes). That post shows it at rot -16.",
+  "path": "M -4.78 -333.49 C -11.04 -332.33, -19.66 -327.29, -25.47 -321.39 C -28.83 -317.98, -175.46 -138.34, -187.22 -123.22 C -215.55 -86.82, -233.88 -41.51, -237.94 2.16 C -247.31 102.91, -194.88 197.66, -105.56 241.36 C -28.05 279.28, 66.21 272.13, 136.60 222.99 C 195.84 181.64, 233.00 116.26, 238.49 43.73 C 242.75 -12.47, 225.68 -71.65, 192.28 -116.43 C 183.84 -127.74, 38.34 -306.68, 28.99 -317.24 C 17.48 -330.24, 6.42 -335.56, -4.78 -333.49",
+  "bbox": [
+    -247.31,
+    -335.56,
+    242.75,
+    279.28
+  ],
+  "area": 199399,
+  "face": [
+    {
+      "x": -64.28,
+      "y": 62.9,
+      "w": 69,
+      "h": 181
+    },
+    {
+      "x": 64.32,
+      "y": 62.89,
+      "w": 69,
+      "h": 181
+    }
+  ],
+  "note": "bbox is from Bezier control points (slightly larger than ink). Face = frontal (both eyes 69x181)."
+}

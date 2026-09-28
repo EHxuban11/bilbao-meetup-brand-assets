@@ -75,15 +75,20 @@ export default {
     { shape: 'square', color: '#00BCA6', move: 'roll' },     // rolls in from the right
   ],
 
+  // Poster copy (50 × 70 cm).
+  poster: { title: ['Grok Bot Meetup', 'La Perrera, Bilbao'], closing: 'Os esperamos allí' },
+
   // Partner logos (white, transparent SVGs in assets/logos/).
+  // rowHeight: logo height in a logo row at scale 1 (the agenda-with-partners screen);
+  // rowBaseline: where the row's shared baseline crosses the logo, as a fraction of its height.
   partners: [
-    { name: 'Acurio Ventures', logo: 'acurio-ventures.svg', role: 'support' },
-    { name: 'We Are Clickers', logo: 'clickers.svg', role: 'support' },
-    { name: 'La Perrera', logo: 'la-perrera.svg', role: 'venue' },
+    { name: 'Acurio Ventures', logo: 'acurio-ventures.svg', role: 'support', rowHeight: 61.97, rowBaseline: 0.692 },
+    { name: 'We Are Clickers', logo: 'clickers.svg', role: 'support', rowHeight: 36.45, rowBaseline: 0.859 },
+    { name: 'La Perrera', logo: 'la-perrera.svg', role: 'venue', rowHeight: 26.63, rowBaseline: 0.976 },
   ],
   partnerCopy: { support: 'Con el apoyo de', venue: 'Nos acoge' },
 
   // Brand marks. `logo` versions of the live screens carry `brandLogo` top-right.
-  brandLogo: 'spacexai-wordmark.svg',   // official SpaceXAI wordmark (white)
-  hostLogo: 'spacex-wordmark.svg',      // classic SpaceX wordmark (used on social, print, clean "Gracias")
+  brandLogo: 'spacexai-wordmark.svg',   // official SpaceXAI wordmark: "-logo" screens, social posts, poster
+  hostLogo: 'spacex-wordmark.svg',      // classic SpaceX wordmark: only on the clean "Gracias" screen
 };

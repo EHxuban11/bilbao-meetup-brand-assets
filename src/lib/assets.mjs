@@ -82,20 +82,25 @@ export function speakerTracks(shapeName) {
   });
 }
 
-// Move eyes from one shape's neutral face onto another's, and scale body motion by size.
+// Move eyes from one shape's neutral face onto another's (position, size and tilt), and scale
+// body motion by size.
 export function retarget(frames, from, to) {
   const A = shape(from), B = shape(to);
   const fa = faceOf(A), fb = faceOf(B);
   const k = fb.h / fa.h;                              // eye size ratio
   const size = Math.sqrt(B.area / A.area);           // body size ratio
+  const da = fb.a - fa.a, r = da * Math.PI / 180, c = Math.cos(r), s = Math.sin(r);
   return frames.map(f => f && {
     b: [f.b[0] * size, f.b[1] * size, f.b[2], f.b[3]],
-    e: (f.e || []).map(([x, y, w, h, a]) => [fb.x + (x - fa.x) * k, fb.y + (y - fa.y) * k, w * k, h * k, a]),
+    e: (f.e || []).map(([x, y, w, h, a]) => {
+      const dx = (x - fa.x) * k, dy = (y - fa.y) * k;
+      return [fb.x + c * dx - s * dy, fb.y + s * dx + c * dy, w * k, h * k, a + da];
+    }),
   });
 }
 function faceOf(s) {
   const [l, r] = s.face;
-  return { x: (l.x + r.x) / 2, y: (l.y + r.y) / 2, h: (l.h + r.h) / 2 };
+  return { x: (l.x + r.x) / 2, y: (l.y + r.y) / 2, h: (l.h + r.h) / 2, a: ((l.a || 0) + (r.a || 0)) / 2 };
 }
 
 // ---------- logos ----------
@@ -120,3 +125,21 @@ export function brandFont() {
   for (const c of candidates) if (existsSync(p('fonts', c))) return { file: `fonts/${c}`, licensed: true };
   return { file: 'fonts/stand-in/InterDisplay-Regular.woff2', licensed: false };
 }
+
+// ---------- fitted poses ----------
+// Bot poses fitted on the designer's stills (tools/fit-stills.mjs -> assets/poses/stills.json).
+export function pose(id) {
+  const all = once('poses', () => JSON.parse(readFileSync(p('assets/poses/stills.json'), 'utf8')));
+  return all[id] || null;
+}
+
+// The anchor that puts track frame `f` exactly on a fitted pose `P` (inverse of the engine's
+// bot transform), so a screen's still and its video can never disagree.
+export function anchorFromPose(P, f) {
+  const fx = P.flip ? -1 : 1, [dx, dy, rot, s] = f.b;
+  const scale = P.scale / s;
+  return { x: P.x - fx * dx * scale, y: P.y - dy * scale, rot: P.rot - fx * rot, scale };
+}
+
+// A pose as a one-frame "track" (for screens whose motion isn't captured yet).
+export const poseFrame = P => ({ b: [0, 0, 0, 1], e: P.eyes });

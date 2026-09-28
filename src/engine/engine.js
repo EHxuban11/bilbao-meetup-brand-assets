@@ -19,9 +19,11 @@ export const ease = {
   quartOut: p => 1 - Math.pow(1 - p, 4),
   quadIn: p => p * p,
   sineInOut: p => -(Math.cos(Math.PI * p) - 1) / 2,
-  backIn: p => c3 * p * p * p - c1 * p * p,
-  backOut: p => 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2),
+  backIn: (p, k = c1) => (k + 1) * p * p * p - k * p * p,
+  backOut: (p, k = c1) => 1 + (k + 1) * Math.pow(p - 1, 3) + k * Math.pow(p - 1, 2),
+  quartInOut: p => (p < 0.5 ? 8 * p ** 4 : 1 - Math.pow(-2 * p + 2, 4) / 2),
 };
+const run = (name, p, k) => ease[name || 'linear'](p, k);
 const clamp01 = v => Math.max(0, Math.min(1, v));
 const progress = (t, start, dur) => clamp01(dur > 0 ? (t - start) / dur : t >= start ? 1 : 0);
 
@@ -103,8 +105,23 @@ const builders = {
 
   rect(it, root) {
     const g = el('g', {}, root);
-    const r = el('rect', { x: it.x, y: it.y, width: it.w, height: it.h, rx: it.r || 0, fill: it.fill || '#fff', stroke: it.stroke, 'stroke-width': it.strokeWidth }, g);
-    return { g, r };
+    const r = el('rect', { x: it.x, y: it.y, width: it.w || 0, height: it.h, rx: it.r || 0, fill: it.fill || '#fff', stroke: it.stroke, 'stroke-width': it.strokeWidth }, g);
+    return { g, r, width: it.w || 0 };
+  },
+
+  // Pre-built SVG markup (e.g. the QR card from src/lib/qr.js).
+  raw(it, root) {
+    const g = el('g', {}, root);
+    g.innerHTML = it.markup;
+    return { g };
+  },
+
+  // Thin-stroke arrow (↗) in a box, as on the link pills.
+  arrow(it, root) {
+    const g = el('g', { fill: 'none', stroke: it.color || '#000', 'stroke-width': it.stroke || 3, 'stroke-linecap': 'butt' }, root);
+    const { x, y, s } = it; // box top-left and size
+    el('path', { d: `M${x + 1} ${y + 1.5}H${x + s}M${x + s - 1.5} ${y}V${y + s - 1}M${x + 1} ${y + s - 2}L${x + s - 2} ${y + 1}` }, g);
+    return { g };
   },
 
   group(it, root, defs) {
@@ -116,6 +133,19 @@ const builders = {
 
 // Elements whose width depends on rendered text (pills) are resolved after fonts load.
 function measureAuto() {
+  const byId = new Map(nodes.filter(n => n.item.id).map(n => [n.item.id, n]));
+  for (const n of nodes) if (n.item.type === 'rect' && n.item.fitText) {
+    const { ids, padRight = 0, pad, center, minWidth = 0 } = n.item.fitText;
+    if (center !== undefined) { // centred pill: text anchored in the middle, `pad` on both sides
+      const len = Math.max(...ids.map(id => byId.get(id).text.getComputedTextLength()));
+      n.width = Math.max(minWidth, len + 2 * pad);
+      n.r.setAttribute('x', center - n.width / 2);
+    } else {
+      const right = Math.max(...ids.map(id => { const m = byId.get(id); return m.item.x + m.text.getComputedTextLength(); }));
+      n.width = Math.max(minWidth, right + (pad ?? padRight) - n.item.x);
+    }
+    n.r.setAttribute('width', n.width);
+  }
   for (const n of nodes) if (n.item.type === 'group' && n.item.autoWidth) {
     const { autoWidth } = n.item;
     const ref = n.children.find(c => c.item.id === autoWidth.measure);
@@ -138,59 +168,76 @@ function pose(n, clip, frame, t) {
   const it = n.item;
   if (it.type === 'group') { for (const c of n.children) pose(c, clip, frame, t); applyFade(n.g, it, clip, t); return; }
   if (it.type === 'line') return poseLine(n, clip, t);
-  if (it.type === 'bot') return poseBot(n, clip, frame);
+  if (it.type === 'bot') return poseBot(n, clip, frame, t);
+  if (it.type === 'rect' && it.grow) poseGrow(n, clip, t);
   applyFade(n.g, it, clip, t);
   applyMove(n.g, it, clip, t);
 }
 
 function poseLine(n, clip, t) {
   const it = n.item, a = scene.text || {};
+  const travel = it.travel ?? n.L;
   let off = 0, visible = true;
   if (clip === 'in' && it.in !== undefined) {
-    const cfg = { dur: 1.0, ease: 'expoOut', ...(a.in || {}) };
-    const p = progress(t, it.in, cfg.dur);
-    off = n.L * (1 - ease[cfg.ease](p));
+    const dur = it.inDur ?? a.in?.dur ?? 1.0, e = it.inEase ?? a.in?.ease ?? 'expoOut';
+    const p = progress(t, it.in, dur);
+    off = travel * (1 - run(e, p));
     if (t < it.in) visible = false;
   } else if (clip === 'out' && it.out !== undefined) {
-    const cfg = { dur: 0.4, ease: 'expoIn', ...(a.out || {}) };
-    const p = progress(t, it.out, cfg.dur);
-    off = -n.L * ease[cfg.ease](p);
+    const dur = it.outDur ?? a.out?.dur ?? 0.4, e = it.outEase ?? a.out?.ease ?? 'expoIn';
+    const p = progress(t, it.out, dur);
+    off = -travel * run(e, p);
     if (p >= 1) visible = false;
   }
   n.g.style.display = visible ? '' : 'none';
-  n.g.setAttribute('clip-path', off !== 0 ? `url(#${n.clipId})` : '');
-  if (!off) n.g.removeAttribute('clip-path');
+  if (off) n.g.setAttribute('clip-path', `url(#${n.clipId})`); else n.g.removeAttribute('clip-path');
   n.text.setAttribute('transform', off ? `translate(0 ${off.toFixed(3)})` : '');
+}
+
+// Pill grows from / shrinks to its left cap: width animates between `from` and `to` (fractions).
+function poseGrow(n, clip, t) {
+  const gr = n.item.grow[clip];
+  let f = 1;
+  if (gr) { const p = progress(t, gr.start, gr.dur); f = gr.from + (gr.to - gr.from) * run(gr.ease, p, gr.k); }
+  const w = Math.max(0, n.width * f), r = Math.min(n.item.r || 0, w / 2, n.item.h / 2);
+  n.r.setAttribute('width', w.toFixed(3)); n.r.setAttribute('rx', r); n.r.setAttribute('ry', r);
+  n.g.style.display = w < 0.5 ? 'none' : '';
 }
 
 function applyFade(g, it, clip, t) {
   const f = it.fade && it.fade[clip];
   if (!f) { g.style.opacity = ''; return; }
   const p = progress(t, f.start, f.dur);
-  const e = ease[f.ease || 'linear'](p);
+  const e = run(f.ease, p, f.k);
   g.style.opacity = String(f.from + (f.to - f.from) * e);
 }
 
 function applyMove(g, it, clip, t) {
   const m = it.move && it.move[clip];
   if (!m) return;
-  const p = progress(t, m.start, m.dur); const e = ease[m.ease || 'linear'](p);
+  const p = progress(t, m.start, m.dur); const e = run(m.ease, p, m.k);
   const dx = (m.dx || 0) * (m.reverse ? 1 - e : e), dy = (m.dy || 0) * (m.reverse ? 1 - e : e);
   g.setAttribute('transform', `translate(${dx} ${dy})`);
 }
 
-function poseBot(n, clip, frame) {
+function poseBot(n, clip, frame, t) {
   const it = n.item;
+  let pop = 1;
+  const pp = it.pop?.[clip];
+  if (pp) { const p = progress(t, pp.start, pp.dur); pop = pp.from + (pp.to - pp.from) * run(pp.ease, p, pp.k); }
   let fr;
   if (clip === 'still') fr = it.still;
   else { const track = it.track?.[clip]; fr = track ? track[Math.min(frame, track.length - 1)] : it.still; }
   if (!fr) { n.g.style.display = 'none'; return; }
-  n.g.style.display = '';
+  n.g.style.display = pop <= 0.0005 ? 'none' : '';
+  // Same convention as tools/fit-bot.mjs: screen = T(x, y) · R(rot) · S(scale · (flip ? -1 : 1), scale) · p.
+  // A flipped bot also plays its motion mirrored (dx and rotation deltas change sign).
   const A = it.anchor; // {x, y, rot, scale}
   const [dx, dy, rot, s] = fr.b;
   const S = A.scale, fx = it.flip ? -1 : 1;
-  const x = A.x + fx * dx * S, y = A.y + dy * S, r = fx * (A.rot + rot) ;
-  n.g.setAttribute('transform', `translate(${x.toFixed(3)} ${y.toFixed(3)}) rotate(${r.toFixed(4)}) scale(${(fx * S * s).toFixed(5)} ${(S * s).toFixed(5)})`);
+  const x = A.x + fx * dx * S, y = A.y + dy * S, r = A.rot + fx * rot;
+  const k = S * s * pop;
+  n.g.setAttribute('transform', `translate(${x.toFixed(3)} ${y.toFixed(3)}) rotate(${r.toFixed(4)}) scale(${(fx * k).toFixed(5)} ${k.toFixed(5)})`);
   const eyes = fr.e || [];
   n.eyes.forEach((e, i) => {
     const q = eyes[i];

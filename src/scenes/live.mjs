@@ -1,119 +1,124 @@
-// Live screens: 1920 × 1080 stills and in → loop → out clips.
-// Each entry of `liveScreens()` is one deliverable folder in out/live-screens/.
+// Live screens: 1920 × 1080 stills and in / loop / out clips, plus stream overlays.
+// Each entry of `liveScreens()` is one deliverable (a still and a video folder).
+// Layout numbers come from docs/layout-live-screens.md; motion from assets/motion/.
 import event from '../../config/event.js';
 import theme from '../../config/theme.js';
-import { brandFont, shape, fitBox, speakerTracks, mirrorTrack, shiftLoop, logo, motion, retarget } from '../lib/assets.mjs';
+import { brandFont, shape, fitBox, speakerTracks, mirrorTrack, shiftLoop, logo, motion, retarget, pose, anchorFromPose, poseFrame } from '../lib/assets.mjs';
 
 const { w: W, h: H } = theme.canvas;
 const T = theme.type, C = theme.color, G = theme.grid, M = theme.margin;
+const FPS = 30, fr = n => n / FPS;
 
-// ---------- building blocks ----------
+// ---------- text ----------
 // With the stand-in font, hero lines get a touch of negative tracking to match Universal Sans widths.
 const STANDIN = !brandFont().licensed;
-const line = (text, role, x, y, color, extra = {}) => ({ type: 'line', text, size: T[role].size, line: T[role].line, x, y, color,
+export const line = (text, role, x, y, color, extra = {}) => ({ type: 'line', text, size: T[role].size, line: T[role].line, x, y, color,
   tracking: STANDIN ? theme.font.standInTracking?.[role] : undefined, ...extra });
 
-// Stack lines downward from a first baseline.
-function stack(lines, role, x, y0, colors, timing = {}) {
+// Lines stacked downward from a first baseline; `in`/`out` are start times (s), staggered per line.
+export function stack(lines, role, x, y0, colors, timing = {}) {
   return lines.map((t, i) => line(t, role, x, y0 + i * T[role].line, colors[i] ?? colors.at(-1), {
     in: timing.in !== undefined ? timing.in + i * (timing.stagger ?? 0.067) : undefined,
     out: timing.out !== undefined ? timing.out + i * (timing.outStagger ?? 0) : undefined,
   }));
 }
-
-function header(lines, colors, timing) {
-  return stack(lines, 'display', M.side, G.headerBaseline, colors, timing);
-}
-
-// SpaceXAI wordmark top-right (the "-logo" versions). Holds still; fades at the end of the out.
-function brandMark(outLen) {
-  const L = logo(event.brandLogo);
-  if (!L) return [];
-  const h = 28, w = h * L.aspect;
-  const end = outLen / 30;
-  return [{ type: 'svg', x: W - M.side - w, y: M.top, w, h, viewBox: L.viewBox, markup: L.markup, color: C.white,
-    fade: { out: { start: end - 0.4, dur: 0.233, from: 1, to: 0 } } }];
-}
-
-function bot(spec, anchor, tracks, stillClip, stillFrame, extra = {}) {
-  const s = shape(spec.shape);
-  return { type: 'bot', shape: spec.shape, path: s.path, color: spec.color, anchor, track: tracks,
-    still: tracks[stillClip][stillFrame], ...extra };
-}
-
-// ---------- screens ----------
-const CLIPS = { speaker: { in: 90, loop: 480, out: 42 } };
-
-function speakerScreen(key, { qa = false } = {}) {
-  const sp = event.speakers[key];
-  const L = CLIPS.speaker;
-  let tracks = speakerTracks(sp.bot.shape);
-  if (qa) tracks = { in: mirrorTrack(tracks.in), loop: shiftLoop(tracks.loop, 240), out: mirrorTrack(tracks.out) };
-  const anchor = fitBox(sp.bot.shape, G.botBox);
-
-  // bottom-anchored block: talk lines end on the foot baseline
-  const foot = qa ? [sp.name] : sp.talk;
-  const footFirst = G.footBaseline - (foot.length - 1) * T.body.line;
-  const company = footFirst - 99, name = company - T.hero.line, time = name - 136;
-  const titleLines = qa ? event.screens.qa.title.concat(event.screens.qa.subtitle) : [sp.name, sp.company];
-
-  const els = [
-    bot(sp.bot, anchor, tracks, 'loop', 36),
-    ...header(event.name, [C.white], { in: 0.11, out: 0 }),
-    line(sp.time, 'display', M.side, time, C.red, { in: 0.36, out: 0.067 }),
-    line(titleLines[0], 'hero', M.side, name, C.white, { in: 0.51, out: 0.067 }),
-    line(titleLines[1], 'hero', M.side, company, C.grey, { in: 0.61, out: 0.067 }),
-  ];
-  if (qa) els.push(line(null, 'body', M.side, G.footBaseline, C.white, { spans: [{ text: sp.name, color: C.white }, { text: ` · ${sp.company}`, color: C.grey }], in: 0.91, out: 0.067 }));
-  else els.push(...stack(sp.talk, 'body', M.side, footFirst, [C.white], { in: 0.91, out: 0.067 }));
-  return { els, clips: L };
-}
-
-// Motion for a single-bot screen: the screen's own capture (assets/motion/<preset>.json)
-// when it exists, otherwise the speaker motion for that shape.
-function screenMotion(preset, shapeName) {
-  const m = motion(preset);
-  const entry = m?.shapes?.[shapeName] || (m?.shapes && Object.values(m.shapes)[0]);
-  if (entry) {
-    const src = m.shapes[shapeName] ? shapeName : Object.keys(m.shapes)[0];
-    const clips = src === shapeName ? entry.clips : Object.fromEntries(Object.entries(entry.clips).map(([k, v]) => [k, retarget(v, src, shapeName)]));
-    const st = m.stills?.[preset] || m.stills?.default || { clip: 'loop', frame: 0 };
-    return { tracks: clips, still: st, lengths: { in: clips.in.length, loop: clips.loop.length, out: clips.out.length }, anchor: entry.screenAnchor };
-  }
-  const tracks = speakerTracks(shapeName);
-  return { tracks, still: { clip: 'loop', frame: 36 }, lengths: CLIPS.speaker };
-}
-
-// Bot anchors for the fixed screens, fitted on the designer's stills (see docs/layout-live-screens.md).
-// A screen can override with `anchor: {x, y, rot, scale}` in config/event.js.
-const ANCHORS = {
-  preshow: { box: [700, 150, 2030, 1330] },
-  welcome: { box: [1012, 191, 1900, 1065] },
-  agenda: { box: [95, 351, 760, 990], align: 'left bottom' },
-  agendaPartners: { box: [87, 342, 700, 860], align: 'left bottom' },
-  thanks: { box: [900, 190, 1780, 1250] },
-  brb: { box: [1073, 345, 1864, 990] },
-};
-function anchorFor(key, shapeName) {
-  const cfg = event.screens[key]?.anchor;
-  if (cfg) return cfg;
-  const a = ANCHORS[key];
-  return fitBox(shapeName, a.box, { align: a.align || 'right bottom' });
-}
-
-function singleBotScreen(key, preset, botSpec, text, anchorKey = key) {
-  const m = screenMotion(preset, botSpec.shape);
-  const anchor = m.anchor || anchorFor(anchorKey, botSpec.shape);
-  const b = { type: 'bot', shape: botSpec.shape, path: shape(botSpec.shape).path, color: botSpec.color, anchor, track: m.tracks, still: m.tracks[m.still.clip][m.still.frame] };
-  return { els: [b, ...text], clips: m.lengths };
-}
-
+const header = (lines, colors, timing = { in: 0.11, out: 0 }) => stack(lines, 'display', M.side, G.headerBaseline, colors, timing);
 const heroBlock = (lines, colors, t0 = 0.11) => stack(lines, 'hero', M.side, G.heroBaseline, colors, { in: t0, out: 0 });
 const footBlock = (lines, colors, t0 = 0.6) => stack(lines, 'body', M.side, G.footBaseline - (lines.length - 1) * T.body.line, colors, { in: t0, out: 0.067 });
 
+// ---------- logos ----------
+export function logoEl(file, box, color, extra = {}) {
+  const L = logo(file);
+  if (!L) return null;
+  const { x, y } = box;
+  const h = box.h ?? box.w / L.aspect, w = box.w ?? h * L.aspect;
+  return { type: 'svg', x: box.right !== undefined ? box.right - w : x, y, w, h, viewBox: L.viewBox, markup: L.markup, color, ...extra };
+}
+// SpaceXAI wordmark top-right (the "-logo" versions): right edge on the margin, top on the margin, 27.92 px tall.
+// It holds still through the in and the loop and fades during the last frames of the out.
+function brandMark(clips) {
+  const outEnd = fr(clips.out ?? 42);
+  const el = logoEl(event.brandLogo, { right: W - M.side, y: M.top, h: 27.92 }, C.white,
+    { fade: clips.out ? { out: { start: outEnd - 0.4, dur: 0.233, from: 1, to: 0 } } : undefined });
+  return el ? [el] : [];
+}
+
+// Row of partner logos on one baseline with 64 px gaps (22-agenda-partners, social posts).
+// `k` scales the row; each partner's rowHeight/rowBaseline come from config/event.js.
+export function partnerRow(x0, baseline, k = 1, gap = 64, extra = {}) {
+  const out = []; let x = x0;
+  for (const p of event.partners) {
+    const L = logo(p.logo); if (!L) continue;
+    const h = p.rowHeight * k, w = h * L.aspect;
+    out.push({ type: 'svg', x, y: baseline - p.rowBaseline * h, w, h, viewBox: L.viewBox, markup: L.markup, color: C.white, ...extra });
+    x += w + gap; // gaps stay 64 px whatever the logo scale (measured on Story Partners)
+  }
+  return out;
+}
+
+// ---------- bots ----------
+const DEFAULT_CLIPS = { in: 90, loop: 480, out: 42 };
+
+// A bot placed on a screen. `poseId` is its fitted pose on the designer's still; `preset` its
+// captured motion (assets/motion/<preset>.json). The anchor is solved so that the motion's still
+// frame lands exactly on the fitted pose; config can override it with `anchor: {x, y, rot, scale}`.
+export function screenBot({ spec, poseId, preset, stillKey, botIndex, override, clips = DEFAULT_CLIPS }) {
+  const P = poseId ? pose(poseId) : null;
+  const m = preset ? motion(preset) : null;
+  const cap = m ? (botIndex !== undefined ? m.bots?.[botIndex] : (m.shapes?.[spec.shape] || (m.shapes && Object.values(m.shapes)[0]))) : null;
+  const sameShape = P && P.shape === spec.shape;
+  let tracks, still, anchor, lengths;
+  if (cap) {
+    const srcShape = cap.shape || (m.shapes?.[spec.shape] ? spec.shape : Object.keys(m.shapes)[0]);
+    tracks = srcShape === spec.shape ? cap.clips : Object.fromEntries(Object.entries(cap.clips).map(([k, v]) => [k, retarget(v, srcShape, spec.shape)]));
+    const st = m.stills?.[stillKey] || Object.values(m.stills || {})[0] || { clip: 'loop', frame: 0 };
+    const f = tracks[st.clip][st.frame];
+    anchor = override || (P ? anchorFromPose(P, f) : { x: cap.anchor.cx, y: cap.anchor.cy, rot: cap.anchor.rot || 0, scale: cap.anchor.scale || 1 });
+    still = { b: f.b, e: sameShape && !override ? P.eyes : f.e };
+    lengths = Object.fromEntries(Object.entries(tracks).map(([k, v]) => [k, v.length]));
+  } else {
+    // no capture yet: hold the fitted pose
+    const f = P ? { b: [0, 0, 0, 1], e: sameShape ? P.eyes : neutralEyes(spec.shape) } : { b: [0, 0, 0, 1], e: neutralEyes(spec.shape) };
+    anchor = override || (P ? { x: P.x, y: P.y, rot: P.rot, scale: P.scale } : fitBox(spec.shape, G.botBox));
+    tracks = { in: [f], loop: [f], out: [f] }; still = f; lengths = clips;
+  }
+  return { el: { type: 'bot', shape: spec.shape, path: shape(spec.shape).path, color: spec.color, anchor, flip: !!P?.flip, track: tracks, still }, lengths };
+}
+const neutralEyes = name => shape(name).face.map(e => [e.x, e.y, e.w, e.h, e.a || 0]);
+
+// ---------- screens ----------
+function speakerScreen(key, { qa = false } = {}) {
+  const sp = event.speakers[key];
+  let tracks = speakerTracks(sp.bot.shape);
+  if (qa) tracks = { in: mirrorTrack(tracks.in), loop: shiftLoop(tracks.loop, 240), out: mirrorTrack(tracks.out) };
+  const anchor = sp.anchor || fitBox(sp.bot.shape, G.botBox);
+
+  // bottom-anchored block: the talk lines end on the foot baseline
+  const foot = qa ? [sp.name] : sp.talk;
+  const footFirst = G.footBaseline - (foot.length - 1) * T.body.line;
+  const company = footFirst - 99, name = company - T.hero.line, time = name - 136;
+  const titles = qa ? [...event.screens.qa.title, ...event.screens.qa.subtitle] : [sp.name, sp.company];
+
+  const els = [
+    { type: 'bot', shape: sp.bot.shape, path: shape(sp.bot.shape).path, color: sp.bot.color, anchor, track: tracks, still: tracks.loop[36] },
+    ...header(event.name, [C.white]),
+    line(sp.time, 'display', M.side, time, C.red, { in: 0.36, out: 0.067 }),
+    line(titles[0], 'hero', M.side, name, C.white, { in: 0.51, out: 0.067 }),
+    line(titles[1], 'hero', M.side, company, C.grey, { in: 0.61, out: 0.067 }),
+  ];
+  if (qa) els.push(line(null, 'body', M.side, G.footBaseline, C.white, { spans: [{ text: sp.name, color: C.white }, { text: ` · ${sp.company}`, color: C.grey }], in: 0.91, out: 0.067 }));
+  else els.push(...stack(sp.talk, 'body', M.side, footFirst, [C.white], { in: 0.91, out: 0.067 }));
+  return { els, clips: { in: tracks.in.length, loop: tracks.loop.length, out: tracks.out.length } };
+}
+
+function singleBot(key, poseId, text, { preset = key, stillKey = key, clips } = {}) {
+  const spec = event.screens[key].bot;
+  const b = screenBot({ spec, poseId, preset, stillKey, override: event.screens[key].anchor, clips });
+  return { els: [b.el, ...text], clips: b.lengths };
+}
+
 function agendaRows(t0 = 0.3) {
-  const rows = [];
-  let y = 128, k = 0;
+  const rows = []; let y = 128, k = 0;
   for (const item of event.agenda) {
     const sp = item.speaker ? event.speakers[item.speaker] : null;
     const title = sp ? sp.name : item.title;
@@ -122,110 +127,120 @@ function agendaRows(t0 = 0.3) {
     rows.push(line(item.time, 'agenda', G.rightColumn, y, C.red, { in: start, out: 0.067 }));
     rows.push(line(title, 'agenda', G.agendaText, y, C.white, { in: start, out: 0.067 }));
     lines.forEach((l, i) => rows.push(line(l, 'agenda', G.agendaText, y + (i + 1) * T.agenda.line, C.grey, { in: start + 0.05 * (i + 1), out: 0.067 })));
-    y += (lines.length + 1) * T.agenda.line + 18;
-    k++;
+    y += (lines.length + 1) * T.agenda.line + 18; k++;
   }
   return rows;
 }
 
-function partnerRow(y = 920, h = 62) {
-  // Row of partner logos, bottom-left, as on 22-agenda-partners (placeholder until logos exist).
-  const out = []; let x = M.side;
-  for (const p of event.partners) {
-    const L = logo(p.logo); if (!L) continue;
-    const lh = p.rowHeight || 48, w = lh * L.aspect;
-    out.push({ type: 'svg', x, y, w, h: lh, viewBox: L.viewBox, markup: L.markup, color: C.white, fade: { in: { start: 0.9, dur: 0.4, from: 0, to: 1, ease: 'cubicOut' } } });
-    x += w + 48;
-  }
-  return out;
-}
-
+const PRESHOW_CLIPS = { in: 72, loop: 600, out: 42 };
 const SCREENS = {
-  preshow: () => singleBotScreen('preshow', 'preshow', event.screens.preshow.bot, [
-    ...header([...event.name, event.date], [C.white, C.white, C.grey], { in: 0.11, out: 0 }),
+  preshow: withLogo => singleBot('preshow', withLogo ? '01-preshow-logo' : '01-preshow', [
+    ...header([...event.name, event.date], [C.white, C.white, C.grey]),
     ...footBlock([event.screens.preshow.note], [C.grey]),
-  ]),
-  welcome: () => singleBotScreen('welcome', 'welcome', event.screens.welcome.bot, [
+  ], { clips: PRESHOW_CLIPS, stillKey: withLogo ? 'preshow-logo' : 'preshow' }),
+  welcome: () => singleBot('welcome', '02-welcome', [
     ...heroBlock([...event.screens.welcome.title, ...event.screens.welcome.subtitle], [C.white, C.grey]),
     ...footBlock([event.nameOneLine, event.date], [C.white, C.grey]),
   ]),
-  agenda: () => singleBotScreen('agenda', 'agenda', event.screens.agenda.bot, [
-    ...header([...event.name, event.date], [C.white, C.white, C.grey], { in: 0.11, out: 0 }),
+  agenda: () => singleBot('agenda', '03-agenda', [
+    ...header([...event.name, event.date], [C.white, C.white, C.grey]),
     ...agendaRows(),
   ]),
-  agendaPartners: () => singleBotScreen('agenda', 'agenda-partners', event.screens.agenda.bot, [
-    ...header([...event.name, event.date], [C.white, C.white, C.grey], { in: 0.11, out: 0 }),
+  agendaPartners: () => singleBot('agenda', '22-agenda-partners', [
+    ...header([...event.name, event.date], [C.white, C.white, C.grey]),
     ...agendaRows(),
-    ...partnerRow(),
-  ], 'agendaPartners'),
+    ...partnerRow(M.side, 963, 1, 64, { fade: { in: { start: 0.9, dur: 0.4, from: 0, to: 1, ease: 'cubicOut' }, out: { start: 0, dur: 0.3, from: 1, to: 0 } } }),
+  ], { preset: 'agenda-partners', stillKey: 'agenda-partners' }),
   thanks: withLogo => {
-    const s = singleBotScreen('thanks', 'thanks', event.screens.thanks.bot, [
+    const s = singleBot('thanks', '11-thanks', [
       ...heroBlock([...event.screens.thanks.title, ...event.screens.thanks.subtitle], [C.white, C.grey]),
       ...footBlock([event.nameOneLine, event.date], [C.white, C.grey]),
     ]);
-    if (!withLogo) { // the clean "Gracias" carries the SpaceX wordmark instead
-      const L = logo(event.hostLogo);
-      if (L) { const h = 24, w = h * L.aspect; s.els.push({ type: 'svg', x: 1837 - w, y: 100, w, h, viewBox: L.viewBox, markup: L.markup, color: C.spacex, fade: { out: { start: 1.0, dur: 0.233, from: 1, to: 0 } } }); }
-    }
+    // the clean "Gracias" carries the classic SpaceX wordmark (the -logo version swaps in SpaceXAI)
+    if (!withLogo) { const e = logoEl(event.hostLogo, { right: 1839.8, y: 100.62, h: 22.7 }, C.spacex, { fade: { out: { start: fr(s.clips.out) - 0.4, dur: 0.233, from: 1, to: 0 } } }); if (e) s.els.push(e); }
     return s;
   },
-  brb: () => singleBotScreen('brb', 'brb', event.screens.brb.bot, [
+  brb: () => singleBot('brb', '12-brb', [
     ...heroBlock(event.screens.brb.title, [C.white, C.white]),
     ...footBlock([event.nameOneLine], [C.white]),
   ]),
+  networking: () => {
+    const bots = event.networkingBots.map((spec, i) => screenBot({ spec, poseId: `10-networking/${i}`, preset: 'networking', stillKey: 'networking', botIndex: i }));
+    // back to front: the green square sits over the blue round
+    const order = [3, 1, 2, 0, 4, 5];
+    return { els: [...order.map(i => bots[i].el), ...heroBlock([...event.screens.networking.title, ...event.screens.networking.subtitle], [C.white, C.white, C.grey])], clips: bots[0].lengths };
+  },
 };
 
-// Registry: id -> builder. `logo` variants add the SpaceXAI wordmark.
-export function liveScreens() {
-  const list = [];
-  const add = (id, folder, fn) => {
-    for (const withLogo of [false, true]) {
-      list.push({
-        id: withLogo ? `${id}-logo` : id, folder: withLogo ? `${folder}-logo` : folder,
-        build() {
-          const { els, clips, background = C.black } = fn(withLogo);
-          const elements = withLogo ? [...els, ...brandMark(clips.out)] : els;
-          return { scene: { w: W, h: H, fps: 30, background, elements }, clips };
-        },
-      });
-    }
-  };
-  add('01-preshow', '01-preshow', SCREENS.preshow);
-  add('02-welcome', '02-welcome', SCREENS.welcome);
-  add('03-agenda', '03-agenda', SCREENS.agenda);
-  const order = ['hugo', 'leire', 'xuban'];
-  order.forEach((k, i) => {
-    const n = 4 + i * 2;
-    add(`${String(n).padStart(2, '0')}-speaker-${k}`, `${String(n).padStart(2, '0')}-speaker-${k}`, () => speakerScreen(k));
-    add(`${String(n + 1).padStart(2, '0')}-qa-${k}`, `${String(n + 1).padStart(2, '0')}-qa-${k}`, () => speakerScreen(k, { qa: true }));
-  });
-  add('10-networking', '10-networking', () => networkingScreen());
-  add('11-thanks', '11-thanks', SCREENS.thanks);
-  add('12-brb', '12-brb', SCREENS.brb);
-  add('22-agenda-partners', '22-agenda-partners', SCREENS.agendaPartners);
-  return list;
+// ---------- overlays (alpha) ----------
+// Lower third: black pill on the bottom-left margin, speaker icon in the left cap, name + details.
+function lowerThird(key) {
+  const sp = event.speakers[key];
+  const detail = sp.lowerThird || [`${sp.company} · ${sp.talk[0]}`, ...sp.talk.slice(1)];
+  const rows = 1 + detail.length, h = rows === 2 ? 128 : 128 + (rows - 2) * 36;
+  const top = 990 - h, nameY = top + (rows === 2 ? 59 : 58);
+  const m = motion('lower-third'), tm = m?.timing;
+  const tIn = tm?.text.in, tOut = tm?.text.out;
+  const ids = ['lt-name', ...detail.map((_, i) => `lt-d${i}`)];
+  const els = [
+    { type: 'rect', id: 'lt-pill', x: M.side, y: top, h, r: 36, fill: C.black, fitText: { ids, padRight: 45 },
+      grow: tm && { in: { start: fr(tm.pill.in.t0), dur: fr(tm.pill.in.dur), ease: tm.pill.in.ease, from: 0, to: 1 },
+                    out: { start: fr(tm.pill.out.t0), dur: fr(tm.pill.out.dur), ease: tm.pill.out.ease, from: 1, to: 0 } } },
+    line(sp.name, 'body', 212, nameY, C.white, { id: 'lt-name', travel: 40,
+      in: tIn && fr(tIn.starts.name), inDur: tIn && fr(tIn.dur), inEase: tIn?.ease,
+      out: tOut && fr(tOut.starts.name), outDur: tOut && fr(tOut.dur), outEase: tOut?.ease }),
+    ...detail.map((d, i) => line(d, 'small', 212, nameY + 40 + i * T.small.line, C.grey, { id: `lt-d${i}`, travel: 38,
+      in: tIn && fr(tIn.starts.detail + i * 1.75), inDur: tIn && fr(tIn.dur), inEase: tIn?.ease,
+      out: tOut && fr(tOut.starts.detail + i * 1.75), outDur: tOut && fr(tOut.dur), outEase: tOut?.ease })),
+  ];
+  const poseId = { hugo: '13-lower-hugo', leire: '14-lower-leire', xuban: '15-lower-xuban' }[key];
+  const b = screenBot({ spec: sp.lowerThirdBot, poseId, preset: 'lower-third', stillKey: 'lower', clips: { in: 48, loop: 480, out: 36 } });
+  const ic = tm?.icon;
+  if (ic) b.el.pop = { in: { start: fr(ic.in.t0), dur: fr(ic.in.dur), ease: ic.in.ease, k: ic.in.overshoot, from: 0, to: 1 },
+                       out: { start: fr(ic.out.t0), dur: fr(ic.out.dur), ease: ic.out.ease, k: ic.out.overshoot, from: 1, to: 0 } };
+  els.splice(1, 0, b.el);
+  return { els, clips: tm ? tm.clips : b.lengths, background: 'transparent', formats: ['mov', 'webm'] };
 }
 
-// Networking: six bots in a cluster, each with its own track when captured.
-function networkingScreen() {
-  const m = motion('networking');
-  const text = heroBlock([...event.screens.networking.title, ...event.screens.networking.subtitle], [C.white, C.white, C.grey]);
-  const bots = event.networkingBots.map((spec, i) => {
-    const cap = m?.bots?.[i];
-    const tracks = cap ? cap.clips : speakerTracks(spec.shape);
-    const anchor = cap?.screenAnchor || NETWORK_ANCHORS[i];
-    const st = m?.stills?.networking || { clip: 'loop', frame: 36 };
-    return { type: 'bot', shape: spec.shape, path: shape(spec.shape).path, color: spec.color, anchor, track: tracks, still: tracks[st.clip][st.frame] };
-  });
-  const L = m ? { in: bots[0].track.in.length, loop: bots[0].track.loop.length, out: bots[0].track.out.length } : CLIPS.speaker;
-  return { els: [...bots, ...text], clips: L };
+function stinger(i) {
+  const spec = event.stingers[i];
+  const b = screenBot({ spec, poseId: `${16 + i}-stinger-${i + 1}`, preset: `stinger-${i + 1}`, stillKey: 'stinger', clips: { main: 48 } });
+  return { els: [b.el], clips: b.lengths.main ? b.lengths : { main: 48 }, background: 'transparent', formats: ['mov', 'webm'] };
 }
-// Provisional cluster anchors (body centroids measured on 10-networking.png); refined by fitting.
-const NETWORK_ANCHORS = [
-  { x: 1293, y: 277, rot: 0, scale: 0.42 },
-  { x: 1092, y: 521, rot: 0, scale: 0.41 },
-  { x: 1467, y: 534, rot: 0, scale: 0.44 },
-  { x: 1004, y: 823, rot: 0, scale: 0.36 },
-  { x: 1298, y: 803, rot: 0, scale: 0.46 },
-  { x: 1659, y: 848, rot: 0, scale: 0.40 },
-];
+
+function logoBug() {
+  const m = motion('logo-bug');
+  const clips = m?.clips || { in: 18, loop: 306, out: 18 };
+  return { els: brandMark(clips), clips, background: 'transparent', formats: ['mov', 'webm'] };
+}
+
+// ---------- registry ----------
+export function liveScreens() {
+  const list = [];
+  const pad = n => String(n).padStart(2, '0');
+  const add = (id, fn, { variants = [false, true] } = {}) => {
+    for (const withLogo of variants) list.push({
+      id: withLogo ? `${id}-logo` : id, folder: withLogo ? `${id}-logo` : id,
+      build() {
+        const { els, clips, background = C.black, formats } = fn(withLogo);
+        const elements = withLogo ? [...els, ...brandMark(clips)] : els;
+        return { scene: { w: W, h: H, fps: FPS, background, elements }, clips, formats };
+      },
+    });
+  };
+  add('01-preshow', SCREENS.preshow);
+  add('02-welcome', SCREENS.welcome);
+  add('03-agenda', SCREENS.agenda);
+  ['hugo', 'leire', 'xuban'].forEach((k, i) => {
+    add(`${pad(4 + i * 2)}-speaker-${k}`, () => speakerScreen(k));
+    add(`${pad(5 + i * 2)}-qa-${k}`, () => speakerScreen(k, { qa: true }));
+  });
+  add('10-networking', SCREENS.networking);
+  add('11-thanks', SCREENS.thanks);
+  add('12-brb', SCREENS.brb);
+  ['hugo', 'leire', 'xuban'].forEach((k, i) => add(`${13 + i}-lower-${k}`, () => lowerThird(k), { variants: [false] }));
+  event.stingers.forEach((_, i) => add(`${16 + i}-stinger-${i + 1}`, () => stinger(i), { variants: [false] }));
+  add('21-logo-bug', logoBug, { variants: [false] });
+  add('22-agenda-partners', SCREENS.agendaPartners);
+  return list;
+}

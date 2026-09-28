@@ -4,6 +4,7 @@
 //   node src/render.mjs stills  [filter]     PNG stills            -> out/live-screens/stills/
 //   node src/render.mjs video   [filter]     in / loop / out / full -> out/live-screens/video/
 //   node src/render.mjs compare [filter]     diff our stills against reference/ -> out/compare/
+//   node src/render.mjs print                 the poster, PDF with and without crop marks -> out/print/
 //
 // `filter`: comma-separated substrings of deliverable ids; prefix with ! to exclude,
 // e.g. "speaker-hugo", "logo", "!logo,!networking".
@@ -16,6 +17,9 @@ import ffmpegPath from 'ffmpeg-static';
 import sharp from 'sharp';
 import { ROOT, brandFont } from './lib/assets.mjs';
 import { liveScreens } from './scenes/live.mjs';
+import { socialPosts } from './scenes/social.mjs';
+import { posterScene, POSTER } from './scenes/print.mjs';
+import { svgToPdf } from './lib/pdf.mjs';
 
 const [cmd = 'stills', filter = '', ...flags] = process.argv.slice(2);
 const OUT = resolve(ROOT, 'out');
@@ -74,13 +78,14 @@ function encoder(file, { alpha = false } = {}) {
 }
 
 // ---------- jobs ----------
-async function renderStill(page, job, dir) {
+async function renderStill(page, job) {
   const { scene } = job.build();
   await mountScene(page, scene);
   await page.evaluate(() => window.seek('still', 0));
   const buf = await shot(page, scene);
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(resolve(dir, `${job.id}.png`), buf);
+  const file = job.file ? resolve(OUT, 'social', `${job.file}.png`) : resolve(OUT, 'live-screens/stills', `${job.id}.png`);
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, buf);
   return buf;
 }
 
@@ -90,27 +95,35 @@ async function renderVideo(page, job, dir) {
   const base = job.folder.replace(/^\d+-/, '');
   const folder = resolve(dir, job.folder);
   const alpha = scene.background === 'transparent';
+  const frames = async (clip, n, sinks) => {
+    for (let f = 0; f < n; f++) {
+      await page.evaluate(([c, k]) => window.seek(c, k), [clip, f]);
+      const buf = await shot(page, scene);
+      for (const s of sinks) await s.write(buf);
+    }
+  };
+  if (clips.main) { // a single clip, e.g. a stinger
+    const outs = formats.map(ext => encoder(resolve(folder, `${base}.${ext}`), { alpha }));
+    await frames('main', clips.main, outs);
+    await Promise.all(outs.map(o => o.end()));
+    return;
+  }
   const outs = formats.map(ext => ({
     in: encoder(resolve(folder, `${base}_1-in.${ext}`), { alpha }),
     loop: encoder(resolve(folder, `${base}_2-loop.${ext}`), { alpha }),
     out: encoder(resolve(folder, `${base}_3-out.${ext}`), { alpha }),
     full: encoder(resolve(folder, `${base}_full.${ext}`), { alpha }),
   }));
-  for (const clip of ['in', 'loop', 'out']) {
-    for (let f = 0; f < clips[clip]; f++) {
-      await page.evaluate(([c, n]) => window.seek(c, n), [clip, f]);
-      const buf = await shot(page, scene);
-      for (const o of outs) { await o[clip].write(buf); await o.full.write(buf); }
-    }
-  }
+  for (const clip of ['in', 'loop', 'out']) await frames(clip, clips[clip], outs.flatMap(o => [o[clip], o.full]));
   await Promise.all(outs.flatMap(o => [o.in.end(), o.loop.end(), o.out.end(), o.full.end()]));
 }
 
 async function compare(job, ours) {
-  const ref = resolve(ROOT, 'reference/live-screens/stills', `${job.id}.png`);
+  const ref = resolve(ROOT, job.ref || `reference/live-screens/stills/${job.id}.png`);
   if (!existsSync(ref)) return null;
-  const a = await sharp(ours).flatten({ background: '#000' }).removeAlpha().raw().toBuffer();
-  const b = await sharp(ref).flatten({ background: '#000' }).removeAlpha().resize(1920, 1080).raw().toBuffer();
+  const { width: W, height: H } = await sharp(ref).metadata();
+  const a = await sharp(ours).flatten({ background: '#000' }).removeAlpha().resize(W, H).raw().toBuffer();
+  const b = await sharp(ref).flatten({ background: '#000' }).removeAlpha().raw().toBuffer();
   let sum = 0, bad = 0; const diff = Buffer.alloc(a.length);
   for (let i = 0; i < a.length; i += 3) {
     const d = (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2])) / 3;
@@ -120,29 +133,57 @@ async function compare(job, ours) {
     diff[i] = yb; diff[i + 1] = ya; diff[i + 2] = ya;
   }
   const dir = resolve(OUT, 'compare'); mkdirSync(dir, { recursive: true });
-  await sharp(diff, { raw: { width: 1920, height: 1080, channels: 3 } }).png().toFile(resolve(dir, `${job.id}.png`));
+  await sharp(diff, { raw: { width: W, height: H, channels: 3 } }).png().toFile(resolve(dir, `${job.id.replace('/', '-')}.png`));
   return { id: job.id, meanDiff: +(sum / (a.length / 3)).toFixed(2), badPct: +(100 * bad / (a.length / 3)).toFixed(2) };
 }
 
+// n workers; each keeps one page per device scale (the @2x social posts render at scale 2).
 async function pool(items, n, fn) {
   const browser = await chromium.launch();
-  const pages = await Promise.all(Array.from({ length: Math.min(n, items.length) }, () => openStage(browser)));
   let i = 0; const results = [];
-  await Promise.all(pages.map(async page => { while (i < items.length) { const it = items[i++]; const t = Date.now(); results.push(await fn(page, it)); console.log(`✓ ${it.id} (${((Date.now() - t) / 1000).toFixed(1)} s)`); } }));
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
+    const pages = {};
+    while (i < items.length) {
+      const it = items[i++]; const t = Date.now();
+      const sc = it.scale || 1;
+      pages[sc] ??= await openStage(browser, { scale: sc });
+      results.push(await fn(pages[sc], it));
+      console.log(`✓ ${it.id} (${((Date.now() - t) / 1000).toFixed(1)} s)`);
+    }
+  }));
   await browser.close();
   return results;
+}
+
+async function renderPrint() {
+  const browser = await chromium.launch();
+  const scene = posterScene();
+  const page = await openStage(browser);
+  await mountScene(page, scene);
+  await page.evaluate(() => window.seek('still', 0));
+  const svg = await page.evaluate(() => window.exportSvg());
+  const dir = resolve(OUT, 'print'); mkdirSync(dir, { recursive: true });
+  const base = 'SpaceXAI Bilbao 50x70 Print';
+  await svgToPdf(svg, resolve(dir, `${base}.pdf`), { ...POSTER, marks: true, title: base });
+  await svgToPdf(svg, resolve(dir, `${base} (sin marcas).pdf`), { ...POSTER, marks: false, title: base });
+  writeFileSync(resolve(dir, `${base} (preview).png`), await shot(page, scene));
+  writeFileSync(resolve(dir, `${base}.svg`), svg);
+  await browser.close();
+  console.log(`✓ poster -> ${dir}`);
 }
 
 async function main() {
   if (!brandFont().licensed) console.warn('! Universal Sans Display not found in fonts/ — rendering with the Inter Display stand-in (see fonts/README.md).');
   const terms = filter.split(',').filter(Boolean);
   const inc = terms.filter(t => !t.startsWith('!')), exc = terms.filter(t => t.startsWith('!')).map(t => t.slice(1));
-  const jobs = liveScreens().filter(j => (!inc.length || inc.some(t => j.id.includes(t))) && !exc.some(t => j.id.includes(t)));
+  if (cmd === 'print') return renderPrint();
+  const all = cmd === 'video' ? liveScreens() : [...liveScreens(), ...socialPosts()];
+  const jobs = all.filter(j => (!inc.length || inc.some(t => j.id.includes(t))) && !exc.some(t => j.id.includes(t)));
   if (!jobs.length) { console.error(`no deliverable matches "${filter}"`); process.exit(1); }
-  if (cmd === 'stills') await pool(jobs, jobsFlag, (p, j) => renderStill(p, j, resolve(OUT, 'live-screens/stills')));
-  else if (cmd === 'video') await pool(jobs, jobsFlag, (p, j) => renderVideo(p, j, resolve(OUT, 'live-screens/video')));
+  if (cmd === 'stills') await pool(jobs, jobsFlag, (p, j) => renderStill(p, j));
+  else if (cmd === 'video') await pool(jobs.filter(j => !j.stillOnly), jobsFlag, (p, j) => renderVideo(p, j, resolve(OUT, 'live-screens/video')));
   else if (cmd === 'compare') {
-    const res = await pool(jobs, jobsFlag, async (p, j) => compare(j, await renderStill(p, j, resolve(OUT, 'live-screens/stills'))));
+    const res = await pool(jobs, jobsFlag, async (p, j) => compare(j, await renderStill(p, j)));
     console.table(res.filter(Boolean));
   } else { console.error(`unknown command ${cmd}`); process.exit(1); }
 }

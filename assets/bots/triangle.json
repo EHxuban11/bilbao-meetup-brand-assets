@@ -11,6 +11,22 @@
   "area": 514544,
   "face": [
     {
+      "x": -97.4,
+      "y": 99.8,
+      "w": 114.7,
+      "h": 295,
+      "a": -5.2
+    },
+    {
+      "x": 113.8,
+      "y": 80.9,
+      "w": 114.7,
+      "h": 295,
+      "a": -5.2
+    }
+  ],
+  "lookRightFace": [
+    {
       "x": 25.71,
       "y": 0.68,
       "w": 125,
@@ -22,5 +38,6 @@
       "w": 109,
       "h": 250
     }
-  ]
+  ],
+  "note": "Outline traced from 02-welcome (its rot 0 is tilted -5.2 deg from upright). `face` is the frontal (neutral) face measured on 10-networking and 19-stinger-4; `lookRightFace` is the welcome pose."
 }
