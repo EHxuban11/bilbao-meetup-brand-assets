@@ -46,9 +46,9 @@ Ours: the print pipeline is done; the layout is in progress.<br>
 <td width="50%" valign="top">
 <a href="reference/speaker-deck/"><img src="docs/previews/slides.jpg" alt="The 13 slide layouts, designer's original"></a>
 <p><b>6. Speaker slides</b><br>
-A PowerPoint template per speaker, 13 layouts, plus the builder that turns a talk.json into a deck.<br>
-Ours: in progress. The preview shows the designer's original.<br>
-<a href="https://github.com/EHxuban11/bilbao-meetup-brand-assets/releases/latest/download/grokbot-bilbao-slides.zip">Download (zip)</a> · <a href="reference/speaker-deck/">Designer's original</a></p>
+A PowerPoint template per speaker, 13 layouts, the speaker kits, and the builder that turns a talk.json into a deck.<br>
+Ours: done. The generated templates are identical to the designer's, part for part; the designer's own build.py runs on them unchanged.<br>
+<a href="https://github.com/EHxuban11/bilbao-meetup-brand-assets/releases/latest/download/grokbot-bilbao-slides.zip">Download (zip)</a> · <a href="reference/speaker-deck/">Designer's original</a> · <a href="docs/deck.md">How to use</a></p>
 </td>
 </tr>
 </table>
@@ -66,7 +66,10 @@ npm install && npx playwright install chromium     # once
 npm run stills                                     # every still        -> out/live-screens/stills/
 npm run video                                      # every clip         -> out/live-screens/video/
 npm run compare                                    # ours against the designer's -> out/compare/
+npm run deck                                       # slide templates and speaker kits -> out/deck/
 ```
+
+To build a speaker's actual deck from their content: `node src/deck/build.mjs talk.json --speaker hugo`. The format is in [docs/deck.md](docs/deck.md).
 
 Every command takes a filter: `node src/render.mjs video speaker-hugo`, `node src/render.mjs stills logo`, `node src/render.mjs stills '!logo'`. One screen's four clips render in about 25 seconds.
 
@@ -74,7 +77,7 @@ Every command takes a filter: `node src/render.mjs video speaker-hugo`, `node sr
 
 Working repo for the event's brand system. Original design: Pablo Gonzalez, delivered through Frame.io on 28 Sep 2026.
 
-> **Status: v0.1 (28 Sep 2026). The speaker and Q&A screens are rebuilt and checked against the originals, stills and video.** The other screens, the overlays, the social posts, the poster and the slides are being rebuilt now. What is decided is in the decisions log at the bottom.
+> **Status: v0.2 (28 Sep 2026). The speaker and Q&A screens (stills and video) and the speaker slides are rebuilt and checked against the originals.** The other screens, the overlays, the social posts and the poster are being rebuilt now. What is decided is in the decisions log at the bottom.
 
 ## The problem
 
@@ -117,7 +120,7 @@ Status as of 28 Sep 2026.
 | 9 | Social: agenda, horizontal and story, 1x and @2x | PNG | Claude | In progress |
 | 10 | Social: partner posts, five | PNG | Claude | In progress |
 | 11 | Poster, with and without crop marks | PDF, CMYK | Claude | Print pipeline done; layout in progress |
-| 12 | Speaker slide templates, four, and the builder | PPTX; `talk.json` | Claude | In progress |
+| 12 | Speaker slide templates, four, the kits, and the builder | PPTX; ZIP; `talk.json` | Claude | Done. Identical to the designer's templates after normalising the XML; his `build.py` gives the same deck and the same warnings as ours |
 | 13 | Partner logos: Acurio Ventures, clickers_, La Perrera | SVG | Claude | Done, exact vectors taken from the poster PDF |
 | 14 | Bot shapes: square, cloud, round, triangle, drop | SVG paths | Claude | Square, cloud and round done; triangle and drop in progress |
 | 15 | QR code to the registration page | SVG | Claude | In progress |
@@ -140,11 +143,13 @@ Status as of 28 Sep 2026.
 - 2026-09-28: bots move with motion captured from the designer's videos, not animated again by hand.
 - 2026-09-28: the designer's deck builder (`build.py`, `SKILL.md`) recovered from the partial kit downloads; our deck builder reads the same `talk.json`.
 - 2026-09-28: print colours use the designer's own CMYK values, read from his poster PDF.
+- 2026-09-28: the slide templates are generated with PptxGenJS plus the same fix-ups the designer applied, so his `build.py` and `SKILL.md` keep working on ours.
 
 ## Repo layout
 
 - `config/`: `event.js` (content) and `theme.js` (grid, type, colours).
 - `assets/bots/`: the bot outlines and their neutral faces. `assets/motion/`: motion tracks per screen. `assets/logos/`: SpaceX, SpaceXAI and partner logos.
+- `src/deck/`: the slide templates, the talk builder and the speaker kits; `verify/` checks them against the designer's files.
 - `src/engine/`: draws a scene as SVG and poses it at any frame. `src/scenes/`: one file per family of deliverables. `src/render.mjs`: stills, videos and comparisons. `src/lib/`: shared loaders, PDF export, QR code.
 - `tools/`: what was used to rebuild the system (measuring baselines, tracing bots, motion capture, comparing videos). Reuse them when the designer sends something new.
 - `docs/`: specs measured from the originals (layout, motion, deck) and the README previews.

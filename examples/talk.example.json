@@ -1,0 +1,31 @@
+{
+  "speaker": { "name": "Hugo Fernández", "org": "Acurio Ventures" },
+  "title": "Innovación, inversión y el futuro de la IA",
+  "link": "linkedin.com/in/tu-perfil",
+  "slides": [
+    { "layout": "portada", "notes": "Preséntate en una frase: quién eres y por qué hablas de esto." },
+    { "layout": "frase", "text": "La IA ya decide dónde invertimos", "notes": "La idea principal de la charla." },
+    { "layout": "seccion", "number": "01", "title": "Dónde estamos" },
+    { "layout": "filas", "title": "Tres cosas que han cambiado", "rows": [
+      { "text": "Modelos más baratos", "detail": "Cada consulta cuesta menos" },
+      { "text": "Agentes que actúan", "detail": "No solo responden, ejecutan" },
+      { "text": "Equipos más pequeños" }
+    ] },
+    { "layout": "cifra", "title": "La inversión sigue creciendo", "figure": "3×", "label": "Más rondas de IA que hace dos años", "source": "Fuente: ejemplo, sustitúyela por la real" },
+    { "layout": "tres-cifras", "title": "La noche en cifras", "figures": [
+      { "value": "3", "label": "Ponentes" },
+      { "value": "45", "unit": "min", "label": "Por charla, con preguntas" },
+      { "value": "4", "unit": "h", "label": "De 17:30 a 21:30" }
+    ] },
+    { "layout": "imagen", "title": "El producto, tal como es", "image": "../src/deck/examples/foto-horizontal.jpg", "caption": "Foto: SpaceX" },
+    { "layout": "imagen-sola", "image": "../src/deck/examples/foto-vertical.jpg", "caption": "Foto: SpaceX" },
+    { "layout": "imagen-a-sangre", "image": "../src/deck/examples/foto-horizontal.jpg", "caption": "Foto: SpaceX" },
+    { "layout": "dos-imagenes", "title": "Antes y después", "images": [
+      { "image": "../src/deck/examples/foto-horizontal.jpg", "label": "Plano general", "detail": "Foto: SpaceX" },
+      { "image": "../src/deck/examples/foto-detalle.jpg", "label": "Detalle", "detail": "Recortado al mismo formato" }
+    ] },
+    { "layout": "cita", "quote": "Lo simple se recuerda", "author": "Nombre Apellido", "role": "Cargo, Empresa" },
+    { "layout": "codigo", "title": "Un agente en cinco líneas", "code": "# Comentarios en gris, código en blanco\ndef saludar(nombre):\n    return f\"Kaixo, {nombre}\"\n\nsaludar(\"Bilbao\")" },
+    { "layout": "cierre", "notes": "Deja esta diapositiva hasta que la organización cambie a preguntas." }
+  ]
+}

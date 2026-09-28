@@ -6,7 +6,8 @@
     "test": "node src/render.mjs compare",
     "stills": "node src/render.mjs stills",
     "video": "node src/render.mjs video",
-    "compare": "node src/render.mjs compare"
+    "compare": "node src/render.mjs compare",
+    "deck": "node src/deck/build.mjs --kit"
   },
   "repository": {
     "type": "git",

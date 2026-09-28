@@ -1,0 +1,21 @@
+{
+  "speaker": { "name": "Leire Legarreta", "org": "We Are Clickers" },
+  "title": "Proyectos punteros de IA en Euskadi que ya están cambiando la industria vasca de verdad",
+  "link": "https://www.linkedin.com/in/un-perfil-con-un-nombre-muy-largo-que-no-cabe/",
+  "slides": [
+    { "layout": "Portada" },
+    { "layout": "Sección", "number": "01", "title": "Un título de sección demasiado largo para caber en una sola línea." },
+    { "layout": "filas", "title": "Filas", "rows": ["uno.", "dos", "tres", "cuatro", "cinco"] },
+    { "layout": "frase" },
+    { "layout": "cifra", "title": "Cifra", "figure": "12345", "label": "Etiqueta" },
+    { "layout": "tres-cifras", "title": "Cifras", "figures": [] },
+    { "layout": "imagen", "title": "Imagen", "image": "no-existe.jpg" },
+    { "layout": "imagen-sola", "image": "../examples/foto-vertical.jpg", "caption": "Foto: SpaceX" },
+    { "layout": "sangre", "image": "../examples/foto-detalle.jpg" },
+    { "layout": "dos-imagenes", "title": "Solo una", "images": [ { "image": "../examples/foto-detalle.jpg", "label": "x" } ] },
+    { "layout": "cita", "quote": "\"Una cita larguísima que tiene muchas más de doce palabras y por eso el script avisa\"", "author": "Alguien" },
+    { "layout": "codigo", "title": "Código.", "code": "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15" },
+    { "layout": "diapositiva-rara" },
+    { "layout": "cierre" }
+  ]
+}
