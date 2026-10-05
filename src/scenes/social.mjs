@@ -3,7 +3,7 @@
 import event from '../../config/event.js';
 import theme from '../../config/theme.js';
 import { shape, pose } from '../lib/assets.mjs';
-import { line, logoEl, partnerRow } from './live.mjs';
+import { line, logoEl, partnerRow, screenBot } from './live.mjs';
 
 const T = theme.type, C = theme.color;
 const WORDMARK = { w: 407.96, h: 49.79 };
@@ -16,14 +16,21 @@ const header = (x, y) => [
 ];
 
 // The agenda rows (times red, first line white, details grey; pitch 54, rows 18 apart).
+// The designer's agenda is 14 lines tall; when the copy runs shorter, the missing height is
+// spread over the gaps between rows so the block still ends where it did.
+const AGENDA_LINES = 14;
 function agenda(timeX, textX, y0) {
   const out = []; let y = y0;
-  for (const item of event.agenda) {
+  const rows = event.agenda.map(item => {
     const sp = item.speaker ? event.speakers[item.speaker] : null;
-    const lines = [sp ? sp.name : item.title, ...(sp ? [sp.company, ...sp.talk] : item.lines)];
-    out.push(line(item.time, 'agenda', timeX, y, C.red));
+    return { time: item.time, lines: [sp ? sp.name : item.title, ...(sp ? [sp.company, ...sp.talk] : item.lines)] };
+  });
+  const total = rows.reduce((n, r) => n + r.lines.length, 0);
+  const gap = 18 + Math.max(0, AGENDA_LINES - total) * T.agenda.line / Math.max(1, rows.length - 1);
+  for (const { time, lines } of rows) {
+    out.push(line(time, 'agenda', timeX, y, C.red));
     lines.forEach((l, i) => out.push(line(l, 'agenda', textX, y + i * T.agenda.line, i ? C.grey : C.white)));
-    y += lines.length * T.agenda.line + 18;
+    y += lines.length * T.agenda.line + gap;
   }
   return out;
 }
@@ -115,4 +122,24 @@ export function socialPosts() {
     });
   }
   return list;
+}
+
+// Animated versions of the posts: the layout above with the bot driven by a captured screen
+// motion (the agenda choreography), anchored so its still frame lands on the post's fitted pose.
+const VIDEOS = {
+  'horizontal-partners': event.social?.agendaBot,
+  'horizontal': event.social?.agendaBot,
+  'partners-feed': event.social?.partnersBot,
+};
+export function socialVideos() {
+  return Object.entries(VIDEOS).map(([key, spec]) => ({
+    id: `social-${key}`, folder: `social-${key}`,
+    build() {
+      const { w, h, els } = POSTS[key]();
+      const P = pose(`social/${key}`);
+      const b = screenBot({ spec: spec || { shape: P.shape, color: P.color }, poseId: `social/${key}`, preset: 'agenda', stillKey: 'agenda' });
+      const elements = [b.el, ...els.slice(1)].filter(Boolean);
+      return { scene: { w, h, fps: 30, background: C.black, elements }, clips: b.lengths };
+    },
+  }));
 }

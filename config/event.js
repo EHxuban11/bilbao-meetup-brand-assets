@@ -40,7 +40,7 @@ export default {
     },
     xuban: {
       name: 'Xuban Ceccon', company: 'Grok Bot',
-      talk: ['Agentes de IA ya montados', 'con sus objetivos y herramientas'],
+      talk: ['Compañeros de IA para trabajo real'],
       time: '19:30',
       bot: { shape: 'round', color: '#FFFFFF' },
       lowerThirdBot: { shape: 'round', color: '#FFFFFF' },

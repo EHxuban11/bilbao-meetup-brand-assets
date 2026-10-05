@@ -177,7 +177,7 @@ const SCREENS = {
     ...header([...event.name, event.date], [C.white, C.white, C.grey]),
     ...agendaRows(),
     ...partnerRow(M.side, 963, 1, 64, { key: 'partners', fade: { in: { start: 0.9, dur: 0.4, from: 0, to: 1, ease: 'cubicOut' }, out: { start: 0, dur: 0.3, from: 1, to: 0 } } }),
-  ], { preset: 'agenda-partners', stillKey: 'agenda-partners' }),
+  ], { preset: 'agenda', stillKey: 'agenda' }),
   thanks: withLogo => {
     const s = singleBot('thanks', '11-thanks', [
       ...heroBlock([...event.screens.thanks.title, ...event.screens.thanks.subtitle], [C.white, C.grey]),

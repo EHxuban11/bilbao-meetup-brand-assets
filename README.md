@@ -67,6 +67,7 @@ npm run stills                                     # every still        -> out/l
 npm run video                                      # every clip         -> out/live-screens/video/
 npm run compare                                    # ours against the designer's -> out/compare/
 npm run social                                     # every social post  -> out/social/
+node src/render.mjs video social-                  # animated social posts (agenda motion) -> out/live-screens/video/social-*/
 npm run print                                      # the poster PDFs    -> out/print/
 npm run deck                                       # slide templates and speaker kits -> out/deck/
 npm run reel                                       # the preview reel, from the rendered clips
